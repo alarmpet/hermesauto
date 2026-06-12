@@ -14,6 +14,8 @@ import {
   stopWebUiTrace,
   writeWebUiEvidence,
 } from "./web-ui-provider-harness.mjs";
+import { createProviderBrowserSession } from "./providers/provider-browser-session.mjs";
+import { downloadAuthenticatedProviderMedia } from "./providers/provider-media-download.mjs";
 
 export const GOOGLE_FLOW_URL = "https://labs.google/fx/ko/tools/flow";
 
@@ -1025,156 +1027,105 @@ async function approveFlowGenerationConfirmation(page) {
   return { approved: false, reason: "approval-button-still-visible", state };
 }
 
+const FLOW_REJECT_BUTTON_EXACT_RE = /^(\s*)?(\uac70\ubd80|reject|decline|cancel|dismiss|no\b)(\s*)?$/i;
+const FLOW_REJECT_BUTTON_LOOSE_RE = /\uac70\ubd80|reject|decline|cancel/i;
+
 async function rejectFlowVideoCreditConfirmation(page) {
-  const state = await page.evaluate(() => {
-    const bodyText = document.body?.innerText || "";
-    const visible = (el) => {
-      const style = getComputedStyle(el);
-      const rect = el.getBoundingClientRect();
-      return !el.disabled
-        && el.getAttribute("aria-disabled") !== "true"
-        && style.visibility !== "hidden"
-        && style.display !== "none"
-        && rect.width > 8
-        && rect.height > 8;
-    };
-    const textOf = (el) => [
-      el.innerText,
-      el.textContent,
-      el.getAttribute("aria-label"),
-      el.getAttribute("title"),
-    ].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
-    const clickableOf = (el) => el.closest("button,[role='button'],[role='menuitem'],[tabindex]") || el;
+  try {
+    const bodyText = await page.locator("body").textContent({ timeout: 3000 }).catch(() => "");
     const open = /(\ud06c\ub808\ub527|credit).*(15|15\uac1c).*(\ub3d9\uc601\uc0c1|video)|(\ub3d9\uc601\uc0c1|video).*(\uc0dd\uc131|generation).*(\ud06c\ub808\ub527|credit)/i.test(bodyText);
     if (!open) return { open: false, rejected: false, reason: "no-video-credit-confirmation" };
-    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
-    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
-    const seen = new Set();
-    const candidates = Array.from(document.querySelectorAll("button,[role='button'],[role='menuitem'],[tabindex],span,div"))
-      .filter(visible)
-      .map((el) => {
-        const clickable = clickableOf(el);
-        const key = clickable;
-        if (seen.has(key)) return null;
-        seen.add(key);
-        return { source: el, el: clickable };
-      })
-      .filter(Boolean)
-      .filter(({ el }) => visible(el))
-      .map((el) => {
-        const rect = el.el.getBoundingClientRect();
-        const text = [textOf(el.el), textOf(el.source)].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
-        return {
-          el: el.el,
-          text,
+
+    const rejectButton = page.locator("button, [role='button'], [role='menuitem'], [tabindex], span, div")
+      .filter({ hasText: FLOW_REJECT_BUTTON_EXACT_RE })
+      .first();
+
+    if (await rejectButton.isVisible().catch(() => false)) {
+      const rect = await rejectButton.boundingBox().catch(() => null);
+      await rejectButton.click();
+      await delay(900);
+      return {
+        open: true,
+        rejected: true,
+        target: rect ? {
           x: Math.round(rect.x + rect.width / 2),
           y: Math.round(rect.y + rect.height / 2),
           width: Math.round(rect.width),
-          height: Math.round(rect.height),
-          inRightPanel: viewportWidth ? rect.x + rect.width / 2 > viewportWidth * 0.55 : true,
-          lowerPanel: viewportHeight ? rect.y + rect.height / 2 > viewportHeight * 0.55 : true,
-        };
-      })
-      .filter((item) => /(\uac70\ubd80|reject|decline|cancel|dismiss|no\b)/i.test(item.text))
-      .sort((a, b) => {
-        const exactScore = /^(check\s*)?(\uac70\ubd80|reject|decline|cancel)$/i.test(b.text) - /^(check\s*)?(\uac70\ubd80|reject|decline|cancel)$/i.test(a.text);
-        const panelScore = (b.inRightPanel ? 1 : 0) - (a.inRightPanel ? 1 : 0);
-        const lowerScore = (b.lowerPanel ? 1 : 0) - (a.lowerPanel ? 1 : 0);
-        const approvalPenalty = /(\uc2b9\uc778|approve|confirm)/i.test(a.text) - /(\uc2b9\uc778|approve|confirm)/i.test(b.text);
-        return exactScore || approvalPenalty || panelScore || lowerScore || a.x - b.x || b.y - a.y;
-      });
-    const target = candidates[0];
-    if (!target) {
-      return {
-        open: true,
-        rejected: false,
-        reason: "reject-button-not-found",
-        bodyTail: bodyText.slice(-800),
-        candidates: candidates.slice(0, 5).map(({ el, ...item }) => item),
+          height: Math.round(rect.height)
+        } : {}
       };
     }
-    target.el.click();
-    const { el, ...targetInfo } = target;
-    return { open: true, rejected: true, target: targetInfo };
-  }).catch((error) => ({ open: false, rejected: false, reason: error?.message || String(error) }));
-  if (state.rejected) await delay(900);
-  return state;
+
+    const looseRejectButton = page.locator("button, [role='button'], [role='menuitem']").filter({ hasText: FLOW_REJECT_BUTTON_LOOSE_RE }).first();
+    if (await looseRejectButton.isVisible().catch(() => false)) {
+      const rect = await looseRejectButton.boundingBox().catch(() => null);
+      await looseRejectButton.click();
+      await delay(900);
+      return {
+        open: true,
+        rejected: true,
+        target: rect ? {
+          x: Math.round(rect.x + rect.width / 2),
+          y: Math.round(rect.y + rect.height / 2),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height)
+        } : {}
+      };
+    }
+
+    return { open: true, rejected: false, reason: "reject-button-not-found" };
+  } catch (error) {
+    return { open: false, rejected: false, reason: error?.message || String(error) };
+  }
 }
 
 async function rejectPaidFlowCreditConfirmation(page) {
-  const state = await page.evaluate(() => {
-    const bodyText = document.body?.innerText || "";
+  try {
+    const bodyText = await page.locator("body").textContent({ timeout: 3000 }).catch(() => "");
     const paidCreditOpen = /(\ud06c\ub808\ub527|credit).*(\uc0ac\uc6a9|use)|(\uc0dd\uc131|generation).*(\ud06c\ub808\ub527|credit)|15\uac1c|15\s*credits/i.test(bodyText);
     if (!paidCreditOpen) return { open: false, rejected: false, reason: "no-paid-credit-confirmation" };
-    const visible = (el) => {
-      const style = getComputedStyle(el);
-      const rect = el.getBoundingClientRect();
-      return !el.disabled
-        && el.getAttribute("aria-disabled") !== "true"
-        && style.visibility !== "hidden"
-        && style.display !== "none"
-        && rect.width > 8
-        && rect.height > 8;
-    };
-    const textOf = (el) => [
-      el.innerText,
-      el.textContent,
-      el.getAttribute("aria-label"),
-      el.getAttribute("title"),
-    ].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
-    const clickableOf = (el) => el.closest("button,[role='button'],[role='menuitem'],[tabindex]") || el;
-    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
-    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
-    const seen = new Set();
-    const candidates = Array.from(document.querySelectorAll("button,[role='button'],[role='menuitem'],[tabindex],span,div"))
-      .filter(visible)
-      .map((el) => {
-        const clickable = clickableOf(el);
-        const key = clickable;
-        if (seen.has(key)) return null;
-        seen.add(key);
-        return { source: el, el: clickable };
-      })
-      .filter(Boolean)
-      .filter(({ el }) => visible(el))
-      .map((el) => {
-        const rect = el.el.getBoundingClientRect();
-        const text = [textOf(el.el), textOf(el.source)].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
-        return {
-          el: el.el,
-          text,
+
+    const rejectButton = page.locator("button, [role='button'], [role='menuitem'], [tabindex], span, div")
+      .filter({ hasText: FLOW_REJECT_BUTTON_EXACT_RE })
+      .first();
+
+    if (await rejectButton.isVisible().catch(() => false)) {
+      const rect = await rejectButton.boundingBox().catch(() => null);
+      await rejectButton.click();
+      await delay(900);
+      return {
+        open: true,
+        rejected: true,
+        target: rect ? {
           x: Math.round(rect.x + rect.width / 2),
           y: Math.round(rect.y + rect.height / 2),
           width: Math.round(rect.width),
-          height: Math.round(rect.height),
-          inRightPanel: viewportWidth ? rect.x + rect.width / 2 > viewportWidth * 0.55 : true,
-          lowerPanel: viewportHeight ? rect.y + rect.height / 2 > viewportHeight * 0.55 : true,
-        };
-      })
-      .filter((item) => /(\uac70\ubd80|reject|decline|cancel|dismiss|no\b)/i.test(item.text))
-      .sort((a, b) => {
-        const exactScore = /^(check\s*)?(\uac70\ubd80|reject|decline|cancel)$/i.test(b.text) - /^(check\s*)?(\uac70\ubd80|reject|decline|cancel)$/i.test(a.text);
-        const panelScore = (b.inRightPanel ? 1 : 0) - (a.inRightPanel ? 1 : 0);
-        const lowerScore = (b.lowerPanel ? 1 : 0) - (a.lowerPanel ? 1 : 0);
-        const approvalPenalty = /(\uc2b9\uc778|approve|confirm)/i.test(a.text) - /(\uc2b9\uc778|approve|confirm)/i.test(b.text);
-        return exactScore || approvalPenalty || panelScore || lowerScore || a.x - b.x || b.y - a.y;
-      });
-    const target = candidates[0];
-    if (!target) {
-      return {
-        open: true,
-        rejected: false,
-        reason: "reject-button-not-found",
-        bodyTail: bodyText.slice(-800),
-        candidates: candidates.slice(0, 5).map(({ el, ...item }) => item),
+          height: Math.round(rect.height)
+        } : {}
       };
     }
-    target.el.click();
-    const { el, ...targetInfo } = target;
-    return { open: true, rejected: true, target: targetInfo };
-  }).catch((error) => ({ open: false, rejected: false, reason: error?.message || String(error) }));
-  if (state.rejected) await delay(900);
-  return state;
+
+    const looseRejectButton = page.locator("button, [role='button'], [role='menuitem']").filter({ hasText: FLOW_REJECT_BUTTON_LOOSE_RE }).first();
+    if (await looseRejectButton.isVisible().catch(() => false)) {
+      const rect = await looseRejectButton.boundingBox().catch(() => null);
+      await looseRejectButton.click();
+      await delay(900);
+      return {
+        open: true,
+        rejected: true,
+        target: rect ? {
+          x: Math.round(rect.x + rect.width / 2),
+          y: Math.round(rect.y + rect.height / 2),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height)
+        } : {}
+      };
+    }
+
+    return { open: true, rejected: false, reason: "reject-button-not-found" };
+  } catch (error) {
+    return { open: false, rejected: false, reason: error?.message || String(error) };
+  }
 }
 
 async function verifyFlowSubmissionStarted(page, jobDir, sceneOrder, outputMode = "video", onProgress, accountSlotId = "default") {
@@ -1586,16 +1537,12 @@ async function blobOrDataUrlToBuffer(page, mediaUrl) {
   return { buffer: Buffer.from(match[2], "base64"), contentType: match[1] };
 }
 
-async function httpUrlToBuffer(context, mediaUrl) {
-  const cookies = await context.cookies([GOOGLE_FLOW_URL, "https://labs.google"]);
-  const cookie = cookies.map((item) => `${item.name}=${item.value}`).join("; ");
-  const response = await fetch(mediaUrl, {
-    headers: { cookie, "user-agent": "Mozilla/5.0 Chrome Flow downloader", accept: "*/*" },
-    redirect: "follow",
+async function httpUrlToBuffer(providerSession, mediaUrl) {
+  return downloadAuthenticatedProviderMedia({
+    providerSession,
+    mediaUrl,
+    cookieUrls: [GOOGLE_FLOW_URL, "https://labs.google"],
   });
-  if (!response.ok) throw new Error(`Flow media download failed: HTTP ${response.status}`);
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  return { buffer: Buffer.from(bytes), contentType: response.headers.get("content-type") || "" };
 }
 
 function mediaExtension(contentType, mediaUrl) {
@@ -1608,10 +1555,10 @@ function mediaExtension(contentType, mediaUrl) {
   return "mp4";
 }
 
-async function saveMedia({ page, context, mediaUrl, outputPathBase }) {
+async function saveMedia({ page, providerSession, mediaUrl, outputPathBase }) {
   const payload = mediaUrl.startsWith("blob:") || mediaUrl.startsWith("data:")
     ? await blobOrDataUrlToBuffer(page, mediaUrl)
-    : await httpUrlToBuffer(context, mediaUrl);
+    : await httpUrlToBuffer(providerSession, mediaUrl);
   const ext = mediaExtension(payload.contentType, mediaUrl);
   const outputPath = `${outputPathBase}.${ext}`;
   await writeFile(outputPath, payload.buffer);
@@ -1640,6 +1587,7 @@ export async function generateGoogleFlowVideoFromPrompt({
   onProgress?.({ message: `장면 ${sceneOrder} Google Flow 프로필을 준비하는 중입니다.` });
   let context;
   let page;
+  let providerSession;
   let tracePath = "";
   let traceStopped = false;
 
@@ -1653,9 +1601,11 @@ export async function generateGoogleFlowVideoFromPrompt({
       headless: false,
       viewport: { width: 1920, height: 1080 },
       windowSize: "1920,1080",
+      launchArgs: ["--start-maximized"],
     });
     context = webUiContext.context;
     page = await visiblePage(context);
+    providerSession = createProviderBrowserSession({ context, page, provider: "google-flow" });
     tracePath = await startWebUiTrace({
       context,
       jobDir,
@@ -1850,6 +1800,7 @@ export async function generateGoogleFlowVideoFromPrompt({
     const beforeUrls = new Set(outputMode === "image" ? before.images : before.videos);
     let activePrompt = prompt;
     let policyRetryUsed = false;
+    let generationFailureSafePromptRetryUsed = false;
     let deadline = Date.now() + timeoutMs;
     const tryPolicyFallback = async (warningState, source = "unknown") => {
       if (!isFlowPolicyWarningText(warningState?.text || "")) return false;
@@ -2003,6 +1954,15 @@ export async function generateGoogleFlowVideoFromPrompt({
       await configureFlowOutputMode(page, outputMode, aspectRatio, jobOptions);
       await verifyFlowOutputMode(page, outputMode, aspectRatio);
 
+      if (
+        outputMode === "image"
+        && safeFallbackPrompt
+        && safeFallbackPrompt !== activePrompt
+        && !generationFailureSafePromptRetryUsed
+      ) {
+        generationFailureSafePromptRetryUsed = true;
+        activePrompt = safeFallbackPrompt;
+      }
       deadline = extendFlowDeadlineForPolicyRetry({ timeoutMs });
       await ensureFlowGeneratorMenuClosedBeforeSubmit({ page, jobDir, sceneOrder });
       const retry = await submitPromptToFlowAgain(page, activePrompt, { jobDir, sceneOrder });
@@ -2010,6 +1970,8 @@ export async function generateGoogleFlowVideoFromPrompt({
       await writeFile(join(jobDir, `scene_${sceneOrder}_flow_generation_failed_retry_state.json`), JSON.stringify({
         ok: true,
         ...serializeFlowSubmitAttempt(retry),
+        usedSafeFallbackPrompt: generationFailureSafePromptRetryUsed,
+        promptHash: promptHash(activePrompt),
         updatedAt: new Date().toISOString(),
       }, null, 2), "utf8");
 
@@ -2106,7 +2068,9 @@ export async function generateGoogleFlowVideoFromPrompt({
       }
       const percents = Array.from(String(last?.text || "").matchAll(/(\d+)%/g)).map((match) => Number(match[1]));
       const hasActiveProgress = percents.length > 0;
-      const flowFailure = hasActiveProgress ? null : classifyFlowGenerationFailureText(last?.text || "");
+      const textValue = String(last?.text || "");
+      const looksActivelyGenerating = /(\uc0dd\uac01\s*\uc911|\uc911\uc9c0|thinking|stop|generating|creating|processing|refining)/i.test(textValue);
+      const flowFailure = hasActiveProgress || looksActivelyGenerating ? null : classifyFlowGenerationFailureText(last?.text || "");
       if (flowFailure) {
         // retryable 실패(FLOW_GENERATION_FAILED)는 자동 재시도 먼저 시도
         if (flowFailure.retryable) {
@@ -2158,8 +2122,6 @@ export async function generateGoogleFlowVideoFromPrompt({
       }
       const currentUrls = outputMode === "image" ? last.images : last.videos;
       newMedia = currentUrls.filter((url) => !beforeUrls.has(url));
-      const textValue = String(last?.text || "");
-      const looksActivelyGenerating = /(\uc0dd\uac01\s*\uc911|\uc911\uc9c0|thinking|stop|generating|creating|processing)/i.test(textValue);
       if (!newMedia.length && !hasActiveProgress) {
         noObservableProgressSince ||= Date.now();
         if (Date.now() - noObservableProgressSince >= ACTIVE_NO_PROGRESS_STALL_MS) {
@@ -2350,7 +2312,7 @@ export async function generateGoogleFlowVideoFromPrompt({
     onProgress?.({ message: `장면 ${sceneOrder} Google Flow ${outputMode === "image" ? "이미지" : "영상"}를 다운로드하는 중입니다.`, details: { outputMode, detectedMediaCount: newMedia.length } });
     const saved = await saveMedia({
       page,
-      context,
+      providerSession,
       mediaUrl: newMedia[0],
       outputPathBase: join(jobDir, `scene_${sceneOrder}_flow`),
     });

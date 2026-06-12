@@ -601,6 +601,31 @@
               <input id="webwrightDiagnosticsEnabled" type="checkbox">
               Webwright 진단 리포트 생성
             </label>
+            <label class="checkbox-line">
+              <input id="useProviderAdapter" type="checkbox">
+              Provider adapter 실험 모드
+            </label>
+            <label class="checkbox-line">
+              Web agent 엔진
+              <select id="webAgentEngine">
+                <option value="webwright">Webwright diagnostics</option>
+                <option value="stagehand">Stagehand selector assist</option>
+                <option value="browser-use">Browser Use recovery</option>
+                <option value="computer-use">Computer Use visual fallback</option>
+              </select>
+            </label>
+            <label class="checkbox-line">
+              <input id="stagehandEnabled" type="checkbox">
+              Stagehand assist 사용
+            </label>
+            <label class="checkbox-line">
+              <input id="browserUseEnabled" type="checkbox">
+              Browser Use assist 사용
+            </label>
+            <label class="checkbox-line">
+              <input id="computerUseEnabled" type="checkbox">
+              Computer Use isolated fallback 사용
+            </label>
             <pre id="authStatusBox"></pre>
           </section>
 

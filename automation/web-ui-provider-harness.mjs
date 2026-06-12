@@ -16,6 +16,7 @@ export async function createWebUiProviderContext({
   headless = false,
   viewport = { width: 1920, height: 1080 },
   windowSize = "1936,1100",
+  launchArgs = [],
 } = {}) {
   if (!provider) throw new Error("WEB_UI_PROVIDER_REQUIRED");
   if (!profileDir) throw new Error("WEB_UI_PROFILE_DIR_REQUIRED");
@@ -27,6 +28,7 @@ export async function createWebUiProviderContext({
     locale: "ko-KR",
     acceptDownloads: true,
     args: [
+      ...launchArgs,
       `--window-size=${windowSize}`,
       "--disable-blink-features=AutomationControlled",
       "--disable-dev-shm-usage",

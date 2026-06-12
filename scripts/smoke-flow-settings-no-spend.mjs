@@ -9,7 +9,10 @@ import { createWebUiProviderContext, writeWebUiEvidence } from "../automation/we
 
 const appData = process.env.APPDATA || join(homedir(), "AppData", "Roaming");
 const hermesRoot = join(appData, "hermes");
-const jobDir = join(hermesRoot, "outputs", "desktop", `flow-settings-no-spend-${Date.now()}`);
+const requestedAspectRatio = process.env.HERMES_FLOW_SMOKE_ASPECT_RATIO === "9:16" ? "9:16" : "16:9";
+const requestedOutputMode = process.env.HERMES_FLOW_SMOKE_OUTPUT_MODE || "image";
+const requestedImageModel = process.env.HERMES_FLOW_SMOKE_IMAGE_MODEL || "nano-banana-pro";
+const jobDir = join(hermesRoot, "outputs", "desktop", `flow-settings-no-spend-${requestedAspectRatio.replace(":", "x")}-${Date.now()}`);
 const profileDir = process.env.HERMES_FLOW_PROFILE_DIR || join(hermesRoot, "browser-profiles", "flow-profile");
 const chromePath = process.env.HERMES_CHROME_PATH || findChromeExecutable();
 
@@ -32,10 +35,10 @@ let report = null;
 try {
   await ensureFlowProject(page);
   await waitForFlowGeneratorReady(page, jobDir, 1);
-  const modeSwitchResult = await configureFlowOutputMode(page, "image", "16:9", {
-    flowImageModel: "nano-banana-pro",
+  const modeSwitchResult = await configureFlowOutputMode(page, requestedOutputMode, requestedAspectRatio, {
+    flowImageModel: requestedImageModel,
   });
-  const modeVerification = await verifyFlowOutputMode(page, "image", "16:9");
+  const modeVerification = await verifyFlowOutputMode(page, requestedOutputMode, requestedAspectRatio);
   const evidence = await writeWebUiEvidence({
     page,
     jobDir,
@@ -50,15 +53,32 @@ try {
   const selectedCount = modeSwitchResult.selectedCountLabel || modeVerification.selectedCountLabel || "";
 
   const checks = {
-    imageMode: modeVerification.selectedOutputMode === "image" || modeSwitchResult.selectedOutputMode === "image",
-    nanoBananaPro: /Nano Banana Pro/i.test(selectedModel),
-    aspect16x9: /16:9|crop_16_9|crop_landscape/i.test(selectedAspect),
-    oneImage: /\b1x\b|^1$/i.test(selectedCount),
+    modeSwitchOk: modeSwitchResult.ok === true,
+    agentOff: requestedOutputMode === "video" || modeSwitchResult.results?.some((item) => item.agentModeOff === true) || false,
+    imageMode: modeVerification.selectedOutputMode === requestedOutputMode || modeSwitchResult.selectedOutputMode === requestedOutputMode,
+
+    requestedModel: requestedOutputMode === "video"
+      ? (modeSwitchResult.results?.some((item) => item.ok && /Veo/i.test(item.text || ""))
+         || /Veo/i.test(selectedModel)
+         || false)
+      : (requestedImageModel === "nano-banana-pro"
+        ? /Nano Banana Pro/i.test(selectedModel)
+        : requestedImageModel === "nano-banana-2"
+          ? /Nano Banana 2/i.test(selectedModel)
+          : /Imagen/i.test(selectedModel)),
+    aspectMatches: requestedAspectRatio === "16:9"
+      ? /16:9|crop_16_9|crop_landscape/i.test(selectedAspect)
+      : /9:16|crop_9_16|crop_portrait/i.test(selectedAspect),
+    oneImage: /\b1x\b|^1$/i.test(selectedCount) || requestedOutputMode === "video",
+
   };
 
   report = {
     ok: Object.values(checks).every(Boolean),
     checks,
+    requestedAspectRatio,
+    requestedOutputMode,
+    requestedImageModel,
     profileDir,
     jobDir,
     modeSwitchResult,
@@ -71,7 +91,7 @@ try {
   if (!report.ok) {
     throw new Error(`FLOW_SETTINGS_NO_SPEND_CHECK_FAILED: ${JSON.stringify(checks)}`);
   }
-  console.log(JSON.stringify({ ok: true, jobDir, checks }, null, 2));
+  console.log(JSON.stringify({ ok: true, jobDir, requestedAspectRatio, requestedOutputMode, requestedImageModel, checks }, null, 2));
 } catch (error) {
   const failure = {
     ok: false,

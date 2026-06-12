@@ -127,6 +127,11 @@ const retryThumbnailBtn = document.querySelector("#retryThumbnailBtn");
 const copyJobSummaryBtn = document.querySelector("#copyJobSummaryBtn");
 const enableLiveMcp = document.querySelector("#enableLiveMcp");
 const webwrightDiagnosticsEnabled = document.querySelector("#webwrightDiagnosticsEnabled");
+const useProviderAdapter = document.querySelector("#useProviderAdapter");
+const webAgentEngine = document.querySelector("#webAgentEngine");
+const stagehandEnabled = document.querySelector("#stagehandEnabled");
+const browserUseEnabled = document.querySelector("#browserUseEnabled");
+const computerUseEnabled = document.querySelector("#computerUseEnabled");
 const thumbnailProviderName = "Flow";
 
 const presetSeconds = { micro: 30, short: 45, standard: 60, extended: 90 };
@@ -264,9 +269,7 @@ function getChapterTargetSeconds() {
 }
 
 function getRequestedAspectRatio() {
-  const customDuration = Number(document.querySelector("#customDurationSeconds")?.value || 60);
-  const longformLike = getVideoFormat() === "longform" || customDuration >= 180 || getLongformTargetSeconds() >= 180;
-  return autoLandscapeLongform?.checked && longformLike ? "16:9" : "9:16";
+  return getVideoFormat() === "longform" && autoLandscapeLongform?.checked ? "16:9" : "9:16";
 }
 
 function shouldSuppressTitleOverlay() {
@@ -374,6 +377,11 @@ function readJobInput() {
     autoLandscapeLongform: Boolean(autoLandscapeLongform?.checked),
     speechSpeed: Number(speed.value),
     mockMediaMode: !appIsPackaged && mockMediaModeInput.checked,
+    useProviderAdapter: Boolean(useProviderAdapter?.checked),
+    webAgentEngine: webAgentEngine?.value || "webwright",
+    stagehandEnabled: Boolean(stagehandEnabled?.checked),
+    browserUseEnabled: Boolean(browserUseEnabled?.checked),
+    computerUseEnabled: Boolean(computerUseEnabled?.checked),
     ollamaAssistEnabled: Boolean(ollamaAssistEnabled?.checked),
     ollamaBaseUrl: ollamaBaseUrl?.value || "http://127.0.0.1:11434",
     ollamaModel: ollamaModel?.value || "gemma4:12b",
@@ -400,6 +408,11 @@ async function loadConfig() {
   if (webwrightDiagnosticsEnabled) {
     webwrightDiagnosticsEnabled.checked = Boolean(persistedConfig?.webwrightDiagnosticsEnabled);
   }
+  if (useProviderAdapter) useProviderAdapter.checked = Boolean(persistedConfig?.useProviderAdapter);
+  if (webAgentEngine) webAgentEngine.value = persistedConfig?.webAgentEngine || "webwright";
+  if (stagehandEnabled) stagehandEnabled.checked = Boolean(persistedConfig?.stagehandEnabled);
+  if (browserUseEnabled) browserUseEnabled.checked = Boolean(persistedConfig?.browserUseEnabled);
+  if (computerUseEnabled) computerUseEnabled.checked = Boolean(persistedConfig?.computerUseEnabled);
   if (appIsPackaged) {
     mockMediaModeInput.checked = false;
     mockMediaModeInput.disabled = true;
@@ -1434,6 +1447,32 @@ webwrightDiagnosticsEnabled?.addEventListener("change", async () => {
     webwrightDiagnosticsEnabled: next.webwrightDiagnosticsEnabled,
   });
 });
+
+async function saveWebAgentAutomationSettings() {
+  const current = await window.hermes.configGet?.().catch(() => ({}));
+  const next = {
+    ...(current || {}),
+    useProviderAdapter: Boolean(useProviderAdapter?.checked),
+    webAgentEngine: webAgentEngine?.value || "webwright",
+    stagehandEnabled: Boolean(stagehandEnabled?.checked),
+    browserUseEnabled: Boolean(browserUseEnabled?.checked),
+    computerUseEnabled: Boolean(computerUseEnabled?.checked),
+  };
+  await window.hermes.configSave?.(next);
+  appendLog("Web agent automation settings updated", {
+    useProviderAdapter: next.useProviderAdapter,
+    webAgentEngine: next.webAgentEngine,
+    stagehandEnabled: next.stagehandEnabled,
+    browserUseEnabled: next.browserUseEnabled,
+    computerUseEnabled: next.computerUseEnabled,
+  });
+}
+
+useProviderAdapter?.addEventListener("change", saveWebAgentAutomationSettings);
+webAgentEngine?.addEventListener("change", saveWebAgentAutomationSettings);
+stagehandEnabled?.addEventListener("change", saveWebAgentAutomationSettings);
+browserUseEnabled?.addEventListener("change", saveWebAgentAutomationSettings);
+computerUseEnabled?.addEventListener("change", saveWebAgentAutomationSettings);
 
 async function handleYouTubeAuthResult(result) {
   if (result.status === "client-secrets-missing") {

@@ -135,6 +135,106 @@ export function validateDraftDurationContract({ draft = {}, job = {}, stage = ""
   };
 }
 
+function isFlowSpendEligibleJob(job = {}) {
+  const options = job?.options || {};
+  if (options.mockMediaMode) return false;
+  if (options.skipFlowMedia || options.localMediaOnly) return false;
+  if (String(options.flowOutputMode || "").toLowerCase() === "mock") return false;
+  return true;
+}
+
+export function validatePreFlowDurationGate({ draft = {}, job = {}, jobDir = "" } = {}) {
+  const targetSeconds = resolveDraftTargetSeconds(job, draft);
+  const estimatedSeconds = estimateDraftNarrationSeconds({ draft, job });
+  const isScriptSource = job?.sourceType === "script";
+  const mode = job?.options?.scriptLengthMode || "";
+
+  if (!isScriptSource) {
+    return {
+      ok: true,
+      skippedReason: "non-script-source",
+      targetSeconds,
+      estimatedSeconds,
+      jobDir,
+    };
+  }
+  if (mode === "auto") {
+    return {
+      ok: true,
+      skippedReason: "script-auto-duration",
+      targetSeconds,
+      estimatedSeconds,
+      jobDir,
+    };
+  }
+  if (!isFlowSpendEligibleJob(job)) {
+    return {
+      ok: true,
+      skippedReason: "mock-media",
+      targetSeconds,
+      estimatedSeconds,
+      jobDir,
+    };
+  }
+
+  const minSeconds = Number((targetSeconds * 0.9).toFixed(2));
+  const maxSeconds = Number((targetSeconds * 1.15).toFixed(2));
+  const recommendedTargetSeconds = Math.max(15, Math.min(1200, Math.round(estimatedSeconds)));
+  const base = {
+    targetSeconds,
+    estimatedSeconds,
+    minSeconds,
+    maxSeconds,
+    recommendedTargetSeconds,
+    jobDir,
+    shouldBlockFlowSpend: true,
+    recoveryActions: [
+      "adjustTargetToEstimatedDuration",
+      "expandScriptBeforeFlow",
+      "switchScriptLengthModeToAuto",
+    ],
+  };
+
+  if (estimatedSeconds < minSeconds) {
+    return {
+      ok: false,
+      failureCode: "PREFLOW_DURATION_TARGET_DRIFT",
+      reason: `Script narration is ${Number(estimatedSeconds.toFixed(2))}s, below the ${minSeconds}s minimum for the ${targetSeconds}s Flow target.`,
+      ...base,
+    };
+  }
+  if (estimatedSeconds > maxSeconds) {
+    return {
+      ok: false,
+      failureCode: "PREFLOW_DURATION_TARGET_DRIFT",
+      reason: `Script narration is ${Number(estimatedSeconds.toFixed(2))}s, above the ${maxSeconds}s maximum for the ${targetSeconds}s Flow target.`,
+      ...base,
+    };
+  }
+  return {
+    ok: true,
+    targetSeconds,
+    estimatedSeconds,
+    minSeconds,
+    maxSeconds,
+    recommendedTargetSeconds,
+    shouldBlockFlowSpend: false,
+    jobDir,
+  };
+}
+
+export function assertPreFlowDurationGate(args = {}) {
+  const result = validatePreFlowDurationGate(args);
+  if (!result.ok) {
+    const error = new Error(`Pre-Flow duration gate failed: ${result.reason}`);
+    error.code = result.failureCode;
+    error.preFlowDurationGate = result;
+    error.durationQa = result;
+    throw error;
+  }
+  return result;
+}
+
 export function assertDraftDurationContract(args = {}) {
   const result = validateDraftDurationContract(args);
   if (!result.ok) {

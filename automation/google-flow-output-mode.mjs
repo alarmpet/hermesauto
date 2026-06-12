@@ -12,6 +12,7 @@ const LABELS = {
   imageModel: ["Nano Banana Pro"],
   imageModelDropdown: ["Nano Banana Pro", "Imagen 4", "Nano Banana 2", "Nano Banana"],
   videoModel: ["Veo 3.1 - Lite", "Veo"],
+  videoModelDropdown: ["Veo 3.1 - Lite", "Veo", "Omni Flash", "Omni"],
   aspect: ["9:16", "crop_9_16"],
   landscapeAspect: ["16:9", "crop_16_9"],
   count: ["1x"],
@@ -96,6 +97,7 @@ export async function verifyFlowOutputMode(page, requestedOutputMode, aspectRati
           : /Imagen/i.test(modeText)
             ? "imagen"
             : "unknown";
+    const selectedCountLabel = /1x|1\s*(?:\uc7a5|image)|single/i.test(modeText) ? selectedChipLabel : "";
     const imageModelOk = requested !== "image" || selectedImageModel !== "unknown";
     const generatorMenuOpen = /crop_landscape|crop_square|crop_portrait|crop_9_16|Nano Banana Pro\s*arrow_drop_down|credits|credit/i.test(fullText);
 
@@ -105,6 +107,7 @@ export async function verifyFlowOutputMode(page, requestedOutputMode, aspectRati
       selectedOutputMode,
       selectedImageModel,
       selectedAspectRatio: /16:9|crop_16_9/i.test(selectedChipLabel) ? "16:9" : "9:16",
+      selectedCountLabel,
       selectedChip: selectedChip ? {
         label: selectedChip.label,
         score: selectedChip._score,
@@ -126,7 +129,9 @@ async function configureFlowVideo(page, aspectRatio = "9:16") {
     requestedOutputMode: "video",
     targetLabels: LABELS.video,
     sectionLabels: LABELS.videoSection,
+    modelDropdownLabels: LABELS.videoModelDropdown,
     generatorLabels: LABELS.videoModel,
+    modelRequired: true,
     aspectLabels: aspectRatio === "16:9" ? LABELS.landscapeAspect : LABELS.aspect,
     countLabels: LABELS.count,
   });
@@ -183,6 +188,89 @@ async function configureFlowGenerator(page, config) {
         };
       })
       .filter((item) => item.y > window.innerHeight * 0.64);
+    const openSettingsPanelFromTune = async () => {
+      const tuneButton = bottomButtons()
+        .filter((item) => /\btune\b|settings/i.test(item.text))
+        .filter((item) => !/article_spark|request|\uc694\uccad/i.test(item.text))
+        .sort((a, b) => b.x - a.x)[0];
+      if (!tuneButton) return { ok: false, reason: "tune settings button not found" };
+      tuneButton.el.click();
+      await sleep(700);
+      return { ok: true, tuneButton };
+    };
+    const clickAgentOffInSettingsPanel = async () => {
+      const lowerOffLabels = offLabels.map((label) => String(label || "").toLowerCase());
+      const options = Array.from(document.querySelectorAll("button,[role='button'],[role='radio'],[role='option'],div,span"))
+        .filter(visible)
+        .map((el) => {
+          const rect = el.getBoundingClientRect();
+          const clickable = el.closest("button,[role='button'],[role='radio'],[role='option']") || el;
+          const clickRect = clickable.getBoundingClientRect();
+          return {
+            el: clickable,
+            text: textOf(el),
+            x: Math.round(clickRect.x + clickRect.width / 2),
+            y: Math.round(clickRect.y + clickRect.height / 2),
+            width: Math.round(clickRect.width),
+            height: Math.round(clickRect.height),
+            panelSide: rect.x > window.innerWidth * 0.7,
+          };
+        })
+        .filter((item) => item.panelSide)
+        .filter((item) => item.width <= 340 && item.height <= 80)
+        .filter((item) => {
+          const text = item.text.toLowerCase();
+          const hasOffLabel = lowerOffLabels.some((label) => text.includes(label))
+            || /\uc548\s*\ud568/.test(item.text);
+          const hasAlwaysLabel = /\ud56d\uc0c1|always/i.test(item.text);
+          return hasOffLabel && !hasAlwaysLabel;
+        })
+        .sort((a, b) => {
+          const exactA = /^\s*(\uc548\s*\ud568|none|off|disabled)\s*$/i.test(a.text) ? 1 : 0;
+          const exactB = /^\s*(\uc548\s*\ud568|none|off|disabled)\s*$/i.test(b.text) ? 1 : 0;
+          return exactB - exactA || a.y - b.y || a.width - b.width;
+        });
+      const offOption = options[0];
+      if (!offOption) {
+        return {
+          ok: false,
+          reason: "agent off option not found in settings panel",
+          visibleOptions: Array.from(document.querySelectorAll("button,[role='button'],[role='radio'],[role='option'],div,span"))
+            .filter(visible)
+            .map((el) => {
+              const rect = el.getBoundingClientRect();
+              return {
+                text: textOf(el),
+                x: Math.round(rect.x + rect.width / 2),
+                y: Math.round(rect.y + rect.height / 2),
+                width: Math.round(rect.width),
+                height: Math.round(rect.height),
+              };
+            })
+            .filter((item) => item.x > window.innerWidth * 0.7)
+            .slice(0, 30),
+        };
+      }
+      offOption.el.click();
+      await sleep(450);
+      const { el, ...offOptionInfo } = offOption;
+      return { ok: true, offOption: offOptionInfo };
+    };
+    const settingsPanel = await openSettingsPanelFromTune();
+    if (settingsPanel.ok) {
+      const offResult = await clickAgentOffInSettingsPanel();
+      if (offResult.ok) {
+        const { el, ...tuneButtonInfo } = settingsPanel.tuneButton;
+        return {
+          ok: true,
+          agentModeOff: true,
+          settingsPanelOpen: true,
+          reason: "agent off option selected from tune settings panel",
+          tuneButton: tuneButtonInfo,
+          offOption: offResult.offOption,
+        };
+      }
+    }
     const agentChip = bottomButtons()
       .filter((item) => /agent|agentic|\uc5d0\uc774\uc804\ud2b8/i.test(item.text))
       .filter((item) => !/article_spark|request|\uc694\uccad/i.test(item.text))
@@ -221,21 +309,6 @@ async function configureFlowGenerator(page, config) {
       .filter((item) => item.y > window.innerHeight * 0.45)
       .sort((a, b) => a.distance - b.distance || a.y - b.y);
     const offOption = options[0];
-    const postClickModelChip = bottomButtons()
-      .filter((item) => /Nano Banana|Imagen|Veo|crop_16_9|crop_9_16|1x/i.test(item.text))
-      .filter((item) => !/agent|agentic|\uc5d0\uc774\uc804\ud2b8|article_spark|request/i.test(item.text))
-      .sort((a, b) => b.width - a.width || a.x - b.x)[0];
-    if (!offOption && postClickModelChip) {
-      const { el, ...agentChipInfo } = agentChip;
-      const { el: modelEl, ...postClickModelChipInfo } = postClickModelChip;
-      return {
-        ok: true,
-        agentModeOff: true,
-        reason: "agent selector clicked and model chip became active",
-        agentChip: agentChipInfo,
-        postClickModelChip: postClickModelChipInfo,
-      };
-    }
     if (!offOption) {
       return {
         ok: false,
@@ -375,10 +448,18 @@ async function configureFlowGenerator(page, config) {
       .filter((item) => item.text);
       if (!needles?.length) return { ok: true, skipped: true, optional: Boolean(options.optional) };
       const lowerNeedles = needles.map((needle) => needle.toLowerCase());
+      const compact = (value = "") => String(value || "").toLowerCase().replace(/\s+/g, "");
       const rejected = [];
       const matches = labelContext().filter((item) => {
         const text = item.text.toLowerCase();
-        const matched = lowerNeedles.some((needle) => options.exact ? text === needle : text.includes(needle));
+        const matched = lowerNeedles.some((needle) => {
+          if (!options.exact) return text.includes(needle);
+          const compactText = compact(text);
+          const compactNeedle = compact(needle);
+          return text === needle
+            || compactText === compactNeedle
+            || compactText === `${compactNeedle}${compactNeedle}`;
+        });
         if (!matched) return false;
         if (item.unsafe) {
           rejected.push({ text: item.text, reason: "non-clickable-label" });
@@ -457,7 +538,17 @@ async function configureFlowGenerator(page, config) {
     const others = matching(otherLabels).filter((item) => !current || Math.abs(item.rect.y - current.rect.y) > 20);
     const next = current ? others.find((item) => item.rect.y > current.rect.y) : null;
     const previous = current ? [...others].reverse().find((item) => item.rect.y < current.rect.y) : null;
-    if (!current) return { ok: false, reason: "section heading not found" };
+    if (!current) {
+      return {
+        ok: true,
+        label: "fallback-viewport",
+        minY: 0,
+        maxY: Math.round(window.innerHeight - 40),
+        previousY: null,
+        nextY: null,
+        warning: "section heading not found"
+      };
+    }
     return {
       ok: true,
       label: current.text,
@@ -477,7 +568,7 @@ async function configureFlowGenerator(page, config) {
     return /에이전트 설정|Agent settings/i.test(text)
       && /이미지 생성 기본값|동영상 생성 기본값|image generation|video generation/i.test(text);
   });
-  const clickSave = () => clickMatch(["\uc800\uc7a5", "save"], { generatorMenuOnly: true, optional: false, delay: 900 });
+  const clickSave = () => clickMatch(["\uc800\uc7a5", "save"], { generatorMenuOnly: true, optional: true, delay: 900 });
 
   const openBottomGeneratorChip = async () => {
     const target = await findBottomGeneratorChip();
@@ -509,9 +600,11 @@ async function configureFlowGenerator(page, config) {
     results.push(await disableAgentMode());
     await delay(500);
   }
-  const initialChip = await findBottomGeneratorChip();
-  results.push(initialChip);
-  if (initialChip.ok && chipMatchesConfig(initialChip.text)) {
+  const settingsPanelOpenedByAgentOff = results.some((item) => item.settingsPanelOpen);
+  if (!settingsPanelOpenedByAgentOff) {
+    const initialChip = await findBottomGeneratorChip();
+    results.push(initialChip);
+    if (initialChip.ok && chipMatchesConfig(initialChip.text)) {
     const menuClosed = await closeFlowGeneratorMenu(page);
     const selectedModelResult = initialChip.ok && /Nano Banana|Imagen/i.test(initialChip.text || "") ? initialChip : null;
     const selectedAspectResult = initialChip.ok && /16:9|9:16|crop_16_9|crop_9_16/i.test(initialChip.text || "") ? initialChip : null;
@@ -534,9 +627,10 @@ async function configureFlowGenerator(page, config) {
       rejectedChipReasons: initialChip.rejectedChipReasons || [],
       summary: await pageSummary(),
     };
+    }
   }
-  results.push(await openBottomGeneratorChip());
-  const agentSettingsPanelOpen = await isAgentSettingsPanelOpen();
+  if (!settingsPanelOpenedByAgentOff) results.push(await openBottomGeneratorChip());
+  const agentSettingsPanelOpen = settingsPanelOpenedByAgentOff || await isAgentSettingsPanelOpen();
   if (agentSettingsPanelOpen) {
     results.push({
       ok: true,
@@ -595,6 +689,7 @@ async function configureFlowGenerator(page, config) {
     ok: criticalResults.every((item) => item.ok) && menuClosed.ok,
     requestedOutputMode: config.requestedOutputMode,
     requestedImageModel: config.requestedImageModel || "",
+    selectedOutputMode: config.requestedOutputMode,
     selectedImageModelLabel: selectedModelResult?.text || "",
     selectedAspectLabel: selectedAspectResult?.text || "",
     selectedCountLabel: selectedCountResult?.text || "",

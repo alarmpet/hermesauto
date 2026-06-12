@@ -6,6 +6,7 @@ import { findChromeExecutable } from "./electron/services/browser-profile-servic
 import { fallbackDraftFromJob, generateYouTubeWorkflowAssets, renderFinalYouTubeVideo } from "./youtube-workflow.mjs";
 import { buildGeminiResearchDraft } from "./automation/gemini-research-draft.mjs";
 import { generateGoogleFlowVideoFromPrompt } from "./automation/google-flow-media.mjs";
+import { createGoogleFlowProviderAdapter } from "./automation/google-flow-provider-adapter.mjs";
 import { buildFlowSafeFallbackPrompt } from "./electron/services/flow-prompt-safety.mjs";
 import { buildDirectScriptDraft } from "./electron/services/direct-script-draft-service.mjs";
 import { renderImageSceneClip } from "./electron/services/image-scene-renderer.mjs";
@@ -14,7 +15,7 @@ import { resolveFfmpegBin } from "./electron/services/ffmpeg-bin-resolver.mjs";
 import { chooseSceneMotionPreset } from "./electron/services/render-effect-presets.mjs";
 import { createThumbnailForJob } from "./pipeline/youtube-thumbnail.mjs";
 import { assertDraftQuality, validateDraftQuality } from "./scripts/youtube-draft-quality.mjs";
-import { assertDraftDurationContract } from "./scripts/youtube-draft-duration.mjs";
+import { assertDraftDurationContract, validatePreFlowDurationGate } from "./scripts/youtube-draft-duration.mjs";
 import { analyzeYouTubeOutput } from "./scripts/analyze-youtube-output.mjs";
 import { classifyNotebookLmFailure, requestNotebookLmResearch } from "./electron/services/notebooklm-provider.mjs";
 import { normalizeResearchBrief, persistResearchBrief } from "./electron/services/longform-research-brief.mjs";
@@ -34,6 +35,27 @@ export function createDefaultYouTubeStages(context = {}) {
       chromePath: runnerContext?.chromePath || context.chromePath,
     }),
   };
+}
+
+function runPreFlowDurationGate({ draft, job, context = {} } = {}) {
+  const preFlowDurationGate = validatePreFlowDurationGate({ draft, job, jobDir: context.jobDir || "" });
+  context.emit?.({
+    type: preFlowDurationGate.ok ? "workflow-progress" : "workflow-warning",
+    jobId: job?.id,
+    phase: "pre-flow-duration-gate",
+    message: preFlowDurationGate.ok
+      ? "Pre-Flow duration gate passed before spending provider credits."
+      : `Pre-Flow duration gate blocked provider credit spend. ${preFlowDurationGate.reason}`,
+    details: { preFlowDurationGate },
+  });
+  if (!preFlowDurationGate.ok) {
+    const error = new Error(`Pre-Flow duration gate failed: ${preFlowDurationGate.reason}`);
+    error.code = preFlowDurationGate.failureCode;
+    error.preFlowDurationGate = preFlowDurationGate;
+    error.durationQa = preFlowDurationGate;
+    throw error;
+  }
+  return preFlowDurationGate;
 }
 
 export async function buildResearchDraft(job, context = {}) {
@@ -76,6 +98,7 @@ export async function buildResearchDraft(job, context = {}) {
         details: diagnostics,
       });
     }
+    runPreFlowDurationGate({ draft, job, context });
     context.emit?.({
       type: "workflow-progress",
       jobId: job.id,
@@ -190,6 +213,7 @@ export async function buildResearchDraft(job, context = {}) {
   }
   const qa = assertDraftQuality({ draft, job, stage: "research" });
   const durationQa = assertDraftDurationContract({ draft, job, stage: "normalized-draft:research", jobDir: context.jobDir || "" });
+  const preFlowDurationGate = runPreFlowDurationGate({ draft, job, context });
   if (qa.qualityWarnings?.length) {
     context.emit?.({
       type: "workflow-warning",
@@ -202,10 +226,10 @@ export async function buildResearchDraft(job, context = {}) {
   context.emit?.({
     type: "workflow-progress",
     jobId: job.id,
-    phase: "draft-duration-qa",
-    message: "Draft duration QA passed before Flow generation.",
-    details: { durationQa },
-  });
+      phase: "draft-duration-qa",
+      message: "Draft duration QA passed before Flow generation.",
+      details: { durationQa, preFlowDurationGate },
+    });
   context.emit?.({
     type: "workflow-progress",
     jobId: job.id,
@@ -228,6 +252,69 @@ function buildFlowImageFallbackPrompt(prompt = "") {
     text = `${text}\n\nOutput mode: image. Generate one clean 16:9 still illustration for motion rendering.`;
   }
   return text;
+}
+
+function buildCompactFlowImageRetryPrompt({ scene = {}, title = "", aspectRatio = "9:16", stylePresetId = "" } = {}) {
+  const ratio = aspectRatio === "16:9" ? "16:9 horizontal" : "9:16 vertical";
+  const isStickman = /stickman/i.test(String(stylePresetId || ""));
+  if (!isStickman) {
+    return buildFlowSafeFallbackPrompt({
+      title,
+      narration: scene.narration,
+      visualCategory: scene.visual_category,
+      sceneOrder: scene.order,
+      aspectRatio,
+    }).prompt;
+  }
+  const category = String(scene.visual_category || "").toLowerCase();
+  const subject = category.includes("core-fact")
+    ? "two anonymous measurement rods with abstract tick marks beside a generic crowned stickman silhouette, showing a mistaken comparison"
+    : category.includes("cause-effect")
+      ? "a symbolic printing press releasing blank pamphlets toward a crowd of anonymous stickman citizens"
+      : category.includes("risk") || category.includes("tension")
+        ? "a dramatic spotlight on a crown, a magnifying glass, and crossed red arrows showing a historical misunderstanding"
+        : category.includes("takeaway")
+          ? "a stickman historian closing a blank scroll while a green discovery highlight appears over a parchment map"
+          : "a stickman historian studying a blank parchment map with a magnifying glass, crown, ruler, red arrows, and spotlight";
+  return [
+    `${ratio} flat vector StickmanPlus history explainer illustration.`,
+    `Main visual: ${subject}.`,
+    "Whiteboard-comic infographic style, warm beige parchment background, thick black outlines, round white stickman heads, dot eyes, simple navy and red accents.",
+    "Use only anonymous fictional symbolic characters and props; do not show any recognizable historical person or real public figure.",
+    "No readable text, no Korean text, no English text, no logos, no watermarks, no subtitles.",
+    "One clean still image for later slow pan and zoom motion rendering.",
+  ].join(" ");
+}
+
+async function generateGoogleFlowMediaWithProviderAdapter({
+  job,
+  scene,
+  context,
+  params,
+  sceneOutputMode = params?.outputMode || "video",
+} = {}) {
+  if (!job?.options?.useProviderAdapter) {
+    return generateGoogleFlowVideoFromPrompt(params);
+  }
+  const adapter = createGoogleFlowProviderAdapter({
+    provider: "google-flow",
+    directGenerate: generateGoogleFlowVideoFromPrompt,
+  });
+  context.emit?.({
+    type: "workflow-progress",
+    jobId: job?.id || context.job?.id || "",
+    phase: "provider-adapter-direct-bridge",
+    message: "Google Flow provider adapter is routing this scene through the direct bridge.",
+    details: {
+      sceneOrder: scene?.order,
+      provider: "google-flow",
+      useProviderAdapter: true,
+      fallbackPath: "direct-google-flow",
+      sceneOutputMode,
+      webAgentEngine: job?.options?.webAgentEngine || "webwright",
+    },
+  });
+  return adapter.generateMedia(params);
 }
 
 export async function generateSceneMedia({ job, scene, jobDir }, context = {}) {
@@ -254,6 +341,12 @@ export async function generateSceneMedia({ job, scene, jobDir }, context = {}) {
     visualCategory: scene.visual_category,
     sceneOrder: scene.order,
     aspectRatio: job?.options?.aspectRatio || "9:16",
+  });
+  const imageSafeFallbackPrompt = buildCompactFlowImageRetryPrompt({
+    scene,
+    title: context.draft?.title || context.assets?.draft?.title || "",
+    aspectRatio: job?.options?.aspectRatio || "9:16",
+    stylePresetId: job?.options?.stylePresetId || "",
   });
   context.emit?.({
     type: "workflow-progress",
@@ -290,7 +383,12 @@ export async function generateSceneMedia({ job, scene, jobDir }, context = {}) {
   });
   let media;
   try {
-    media = await generateGoogleFlowVideoFromPrompt({
+    media = await generateGoogleFlowMediaWithProviderAdapter({
+      job,
+      scene,
+      context,
+      sceneOutputMode: outputMode,
+      params: {
       prompt,
       jobDir,
       sceneOrder: scene.order,
@@ -299,7 +397,7 @@ export async function generateSceneMedia({ job, scene, jobDir }, context = {}) {
       outputMode,
       aspectRatio: job?.options?.aspectRatio || "9:16",
       timeoutMs: context.flowTimeoutMs,
-      safeFallbackPrompt: fallback.prompt,
+      safeFallbackPrompt: outputMode === "image" ? imageSafeFallbackPrompt : fallback.prompt,
       ingredientImagePaths: job?.options?.characterSheet?.referenceImagePaths || [],
       flowPacer: flowSceneContext.flowPacer,
       flowAccountSlotId: flowSceneContext.slot.id,
@@ -328,7 +426,8 @@ export async function generateSceneMedia({ job, scene, jobDir }, context = {}) {
           message: isFlowModeMismatch ? `Google Flow output mode mismatch: ${message}` : message,
           details: enrichedDetails,
         });
-        context.onFlowProgress?.({ message, details: enrichedDetails });
+          context.onFlowProgress?.({ message, details: enrichedDetails });
+        },
       },
     });
   } catch (error) {
@@ -358,7 +457,12 @@ export async function generateSceneMedia({ job, scene, jobDir }, context = {}) {
       const imageFallbackPrompt = buildFlowImageFallbackPrompt(prompt);
       let imageMedia;
       try {
-        imageMedia = await generateGoogleFlowVideoFromPrompt({
+        imageMedia = await generateGoogleFlowMediaWithProviderAdapter({
+          job,
+          scene,
+          context,
+          sceneOutputMode: "image",
+          params: {
           prompt: imageFallbackPrompt,
           jobDir,
           sceneOrder: scene.order,
@@ -392,7 +496,8 @@ export async function generateSceneMedia({ job, scene, jobDir }, context = {}) {
               message,
               details: enrichedDetails,
             });
-            context.onFlowProgress?.({ message, details: enrichedDetails });
+              context.onFlowProgress?.({ message, details: enrichedDetails });
+            },
           },
         });
       } catch (imageError) {

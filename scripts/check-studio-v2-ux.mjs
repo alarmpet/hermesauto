@@ -24,6 +24,16 @@ assert.match(html, /flowOutputModeHint/, "UI should explain video versus image g
 assert.match(html, /autoLandscapeLongform/, "UI should expose optional longform landscape output");
 assert.match(app, /aspectRatio:\s*getRequestedAspectRatio\(\)/, "renderer should submit selected output aspect ratio");
 assert.match(app, /autoLandscapeLongform:\s*Boolean/, "renderer should submit the landscape checkbox");
+assert.match(
+  app,
+  /getVideoFormat\(\)\s*===\s*"longform"\s*&&\s*autoLandscapeLongform\?\.checked\s*\?\s*"16:9"\s*:\s*"9:16"/,
+  "renderer should only request 16:9 when Longform and the landscape checkbox are both selected",
+);
+assert.doesNotMatch(
+  app,
+  /getLongformTargetSeconds\(\)\s*>=\s*180|customDuration\s*>=\s*180/,
+  "renderer must not infer 16:9 from duration while Shorts is selected",
+);
 assert.match(html, /value="hybrid"/, "UI should expose Hybrid Google Flow mode");
 assert.match(html, /value="auto"/, "UI should expose Auto Google Flow mode");
 assert.match(html, /id="hybridIntroVideoSceneCount"/, "UI should expose opening video scene count");

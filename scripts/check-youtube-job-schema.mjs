@@ -9,6 +9,7 @@ import {
   VOICE_PRESETS,
 } from "../youtube-job-schema.mjs";
 import { buildDesktopJobRequest } from "../electron/services/youtube-job-service.mjs";
+import { readFileSync } from "node:fs";
 
 assert.ok(SCRIPT_LENGTH_PRESETS.short.sceneCount >= 3, "short preset should create multiple scenes");
 assert.ok(SCRIPT_LENGTH_PRESETS.standard.targetSeconds >= 60, "standard preset should support normal shorts length");
@@ -87,10 +88,49 @@ assert.equal(customJob.options.aspectRatio, "9:16", "default output aspect shoul
 const landscapeJob = normalizeYouTubeJobRequest({
   sourceType: "keyword",
   sourceValue: "custom landscape",
-  options: { scriptLengthMode: "custom", customDurationSeconds: 180, autoLandscapeLongform: true },
+  options: { videoFormat: "longform", scriptLengthMode: "custom", customDurationSeconds: 600, autoLandscapeLongform: true },
 });
-assert.equal(landscapeJob.options.aspectRatio, "16:9", "checked 3min+ jobs should switch to horizontal output");
-assert.equal(landscapeJob.options.titleOverlayEnabled, false, "3min+ horizontal jobs should not render top title overlays");
+assert.equal(landscapeJob.options.aspectRatio, "16:9", "checked longform jobs should switch to horizontal output");
+assert.equal(landscapeJob.options.titleOverlayEnabled, false, "longform horizontal jobs should not render top title overlays");
+
+const shortsLandscapeCheckboxJob = normalizeYouTubeJobRequest({
+  sourceType: "script",
+  sourceValue: "Shorts should stay vertical even when a stale landscape checkbox is checked.",
+  options: {
+    videoFormat: "shorts",
+    scriptLengthMode: "auto",
+    customDurationSeconds: 240,
+    estimatedScriptSeconds: 240,
+    aspectRatio: "16:9",
+    autoLandscapeLongform: true,
+  },
+});
+assert.equal(shortsLandscapeCheckboxJob.options.aspectRatio, "9:16", "shorts jobs must stay vertical even if autoLandscapeLongform or stale 16:9 input is present");
+
+const desktopShortsLandscapeCheckboxJob = buildDesktopJobRequest({
+  sourceType: "script",
+  sourceValue: "Desktop shorts mapper should not preserve stale landscape inputs.",
+  videoFormat: "shorts",
+  scriptLengthMode: "auto",
+  customDurationSeconds: 240,
+  estimatedScriptSeconds: 240,
+  aspectRatio: "16:9",
+  autoLandscapeLongform: true,
+  flowOutputMode: "image",
+});
+assert.equal(desktopShortsLandscapeCheckboxJob.options.aspectRatio, "9:16", "desktop shorts jobs must submit 9:16 to Google Flow");
+
+const desktopLongformLandscapeJob = buildDesktopJobRequest({
+  sourceType: "script",
+  sourceValue: "Desktop longform mapper should preserve explicit landscape output.",
+  videoFormat: "longform",
+  scriptLengthMode: "custom",
+  customDurationSeconds: 600,
+  aspectRatio: "16:9",
+  autoLandscapeLongform: true,
+  flowOutputMode: "image",
+});
+assert.equal(desktopLongformLandscapeJob.options.aspectRatio, "16:9", "desktop longform jobs should submit 16:9 to Google Flow when landscape is checked");
 
 const longformTitleDefaultJob = normalizeYouTubeJobRequest({
   sourceType: "keyword",
@@ -225,6 +265,21 @@ assert.equal(desktopFlowAccountJob.options.flowAccountRoutingEnabled, true);
 assert.equal(desktopFlowAccountJob.options.flowAccountBatchSize, 30);
 assert.equal(desktopFlowAccountJob.options.flowAccountSlots[0].id, "flow-a");
 assert.equal(desktopFlowAccountJob.options.flowAccountSlots[1].id, "flow-b");
+
+const desktopFlowImageJob = buildDesktopJobRequest({
+  sourceType: "script",
+  sourceValue: "Desktop Flow image settings mapper test.",
+  flowOutputMode: "image",
+  flowImageModel: "nano-banana-2",
+  rejectPaidFlowCredits: false,
+});
+assert.equal(desktopFlowImageJob.options.flowOutputMode, "image");
+assert.equal(desktopFlowImageJob.options.flowImageModel, "nano-banana-2");
+assert.equal(desktopFlowImageJob.options.rejectPaidFlowCredits, true);
+
+const flowOutputModeSource = readFileSync(new URL("../automation/google-flow-output-mode.mjs", import.meta.url), "utf8");
+assert.match(flowOutputModeSource, /selectedCountLabel/, "Flow image mode verification should preserve selected 1x count evidence");
+assert.match(flowOutputModeSource, /1x\|1\\s\*/, "Flow image mode verification should detect 1x from the selected bottom chip");
 
 const chapteredLongformJob = normalizeYouTubeJobRequest({
   sourceType: "script",

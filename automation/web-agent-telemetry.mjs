@@ -1,0 +1,30 @@
+export function createWebAgentTelemetryEvent({
+  jobId = "",
+  provider = "",
+  engine = "",
+  task = "",
+  startedAt = Date.now(),
+  endedAt = Date.now(),
+  success = false,
+  failureCode = "",
+  observationPath = "",
+  mediaAccepted = false,
+  costUnits = 0,
+  manualInterventionRequired = false,
+} = {}) {
+  return {
+    type: "web-agent-telemetry",
+    jobId,
+    provider,
+    engine,
+    task,
+    durationMs: Math.max(0, Number(endedAt) - Number(startedAt)),
+    success: Boolean(success),
+    failureCode,
+    observationPath,
+    mediaAccepted: Boolean(mediaAccepted),
+    costUnits: Number.isFinite(Number(costUnits)) ? Number(costUnits) : 0,
+    manualInterventionRequired: Boolean(manualInterventionRequired),
+    updatedAt: new Date().toISOString(),
+  };
+}

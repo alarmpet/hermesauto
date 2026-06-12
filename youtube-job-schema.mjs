@@ -70,6 +70,11 @@ export const DEFAULT_YOUTUBE_JOB_OPTIONS = {
   flowOutputMode: "hybrid",
   flowImageModel: "nano-banana-pro",
   rejectPaidFlowCredits: true,
+  useProviderAdapter: false,
+  webAgentEngine: "webwright",
+  stagehandEnabled: false,
+  browserUseEnabled: false,
+  computerUseEnabled: false,
   flowAccountRoutingEnabled: false,
   flowAccountBatchSize: 30,
   flowAccountMinSubmitGapMs: 60_000,
@@ -286,8 +291,9 @@ export function normalizeYouTubeJobRequest(input = {}) {
   options.flowAccountMinSubmitGapMs = Math.max(30_000, Math.min(10 * 60_000, Math.round(Number(options.flowAccountMinSubmitGapMs || 60_000))));
   options.flowAccountFailureCooldownMs = Math.max(5 * 60_000, Math.min(6 * 60 * 60_000, Math.round(Number(options.flowAccountFailureCooldownMs || 30 * 60_000))));
   options.autoLandscapeLongform = Boolean(options.autoLandscapeLongform);
-  const longformLikeDuration = Number(options.customDurationSeconds || options.longformTargetSeconds || 0) >= 180;
-  if (options.autoLandscapeLongform && (options.videoFormat === "longform" || longformLikeDuration)) {
+  if (options.videoFormat === "shorts") {
+    options.aspectRatio = "9:16";
+  } else if (options.autoLandscapeLongform && options.videoFormat === "longform") {
     options.aspectRatio = "16:9";
   } else {
     options.aspectRatio = String(options.aspectRatio || "9:16") === "16:9" ? "16:9" : "9:16";
