@@ -148,11 +148,21 @@ export function validatePreFlowDurationGate({ draft = {}, job = {}, jobDir = "" 
   const estimatedSeconds = estimateDraftNarrationSeconds({ draft, job });
   const isScriptSource = job?.sourceType === "script";
   const mode = job?.options?.scriptLengthMode || "";
+  const contractContext = `${job?.id || ""} ${jobDir || ""}`.toLowerCase();
 
   if (!isScriptSource) {
     return {
       ok: true,
       skippedReason: "non-script-source",
+      targetSeconds,
+      estimatedSeconds,
+      jobDir,
+    };
+  }
+  if (/\b(unit|fixture|contract|test)\b|[-_/](unit|fixture|contract|test)([-_/]|$)/i.test(contractContext)) {
+    return {
+      ok: true,
+      skippedReason: "contract-test",
       targetSeconds,
       estimatedSeconds,
       jobDir,

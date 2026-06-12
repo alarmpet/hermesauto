@@ -73,12 +73,12 @@ assert.match(stageSource, /pre-flow-duration-gate/);
 const emitted = [];
 await assert.rejects(
   () => buildResearchDraft({
-    id: "preflow-duration-fixture",
+    id: "preflow-duration-live",
     sourceType: "script",
     sourceValue: shortDraft.script,
     options: baseJob.options,
   }, {
-    jobDir: "preflow-duration-fixture",
+    jobDir: "preflow-duration-live",
     emit: (event) => emitted.push(event),
   }),
   (error) => error?.code === "PREFLOW_DURATION_TARGET_DRIFT",
