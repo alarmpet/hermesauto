@@ -50,6 +50,22 @@ assert.equal(mediumAuto[8], "video", "climax/reversal scene should become video"
 assert.ok(mediumAuto.filter((mode) => mode === "video").length >= 4);
 assert.ok(mediumAuto.filter((mode) => mode === "image").length >= 6);
 
+const noPaidCreditAuto = assignSceneOutputModes({
+  scenes,
+  flowOutputMode: "auto",
+  targetSeconds: 150,
+  rejectPaidFlowCredits: true,
+});
+assert.deepEqual(
+  noPaidCreditAuto.map((scene) => scene.outputMode),
+  Array.from({ length: scenes.length }, () => "image"),
+  "auto mode should not select video scenes when paid Flow credits are rejected",
+);
+assert.ok(
+  noPaidCreditAuto.some((scene) => /paid video credits rejected/i.test(scene.autoRejectedReason || "")),
+  "auto mode should explain video rejection when paid Flow credits are disabled",
+);
+
 const longformOrders = resolveAutoVideoSceneOrders({
   scenes: Array.from({ length: 40 }, (_, index) => ({
     order: index + 1,

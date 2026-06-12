@@ -41,7 +41,7 @@ export function targetSceneCount({ sentenceCount, targetSeconds }) {
   return Math.min(MAX_SCENES, Math.max(byTime, bySentence));
 }
 
-export function planScenesFromScript({ script, title, targetSeconds, customDurationSeconds, speechSpeed = 1.0, characterProfile, stylePreset, characterSheet, flowOutputMode = "video", hybridIntroVideoSceneCount = 2, aspectRatio = "9:16" }) {
+export function planScenesFromScript({ script, title, targetSeconds, customDurationSeconds, speechSpeed = 1.0, characterProfile, stylePreset, characterSheet, flowOutputMode = "video", hybridIntroVideoSceneCount = 2, aspectRatio = "9:16", rejectPaidFlowCredits = false }) {
   const totalDuration = Math.max(15, Math.min(MAX_LONGFORM_SECONDS, Number(customDurationSeconds || targetSeconds || 60)));
   const sentences = splitKoreanSentences(script);
   const sourceSentences = sentences.length ? sentences : [String(script || title || "Scene").trim()].filter(Boolean);
@@ -77,6 +77,7 @@ export function planScenesFromScript({ script, title, targetSeconds, customDurat
       sceneOrder: scene.order,
       flowOutputMode,
       hybridIntroVideoSceneCount,
+      rejectPaidFlowCredits,
     });
     const prompt = buildVisualStoryPrompt({
       title,
@@ -118,6 +119,7 @@ export function planScenesFromScript({ script, title, targetSeconds, customDurat
   const splitScenes = splitLongNarrationScenes(preSplitScenes, {
     flowOutputMode,
     hybridIntroVideoSceneCount,
+    rejectPaidFlowCredits,
   });
 
   // 분할 후 order 재정렬, outputMode 재계산, 프롬프트 재생성 및 모션 프리셋 다양성 보장
@@ -128,6 +130,7 @@ export function planScenesFromScript({ script, title, targetSeconds, customDurat
     hybridIntroVideoSceneCount,
     targetSeconds: totalDuration,
     videoFormat: totalDuration >= 600 ? "longform" : "shorts",
+    rejectPaidFlowCredits,
   });
 
   return resolvedScenes.map((scene, index) => {
@@ -364,16 +367,17 @@ function chunkSectionNarration(narration, duration, preferSentences) {
   return chunks.length ? chunks : [narration];
 }
 
-function splitLongNarrationScenes(scenes = [], { flowOutputMode = "video", hybridIntroVideoSceneCount = 0 } = {}) {
+function splitLongNarrationScenes(scenes = [], { flowOutputMode = "video", hybridIntroVideoSceneCount = 0, rejectPaidFlowCredits = false } = {}) {
   const result = [];
   for (const scene of scenes) {
     const nextOrder = result.length + 1;
-    const plannedOutputMode = String(flowOutputMode || "").toLowerCase() === "auto"
+    const plannedOutputMode = String(flowOutputMode || "").toLowerCase() === "auto" && !rejectPaidFlowCredits
       ? "video"
       : outputModeForScene({
           sceneOrder: nextOrder,
           flowOutputMode,
           hybridIntroVideoSceneCount,
+          rejectPaidFlowCredits,
         });
     const maxChars = plannedOutputMode === "video" ? MAX_VIDEO_NARRATION_CHARS : MAX_IMAGE_NARRATION_CHARS;
     const chunks = splitNarrationByCompactLength(scene.narration, maxChars);

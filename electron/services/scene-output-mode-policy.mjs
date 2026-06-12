@@ -15,10 +15,12 @@ export function outputModeForScene({
   videoFormat = "shorts",
   introVideoClipCount = 10,
   speechSpeed = 1,
+  rejectPaidFlowCredits = false,
 } = {}) {
   const mode = String(flowOutputMode || "hybrid").toLowerCase();
   const order = Math.max(1, Number(sceneOrder || 1));
   const introCount = Math.max(0, Math.min(10, Math.round(Number(hybridIntroVideoSceneCount ?? 2))));
+  if (rejectPaidFlowCredits && (mode === "auto" || mode === "video" || mode === "hybrid")) return "image";
   if (mode === "auto") {
     return resolveAutoVideoSceneDecisions({
       scenes,
@@ -27,6 +29,7 @@ export function outputModeForScene({
       introVideoClipCount,
       hybridIntroVideoSceneCount,
       speechSpeed,
+      rejectPaidFlowCredits,
     }).has(order) ? "video" : "image";
   }
   if (mode === "hybrid") return order <= introCount ? "video" : "image";
@@ -42,9 +45,10 @@ export function assignSceneOutputModes({
   videoFormat = "shorts",
   introVideoClipCount = 10,
   speechSpeed = 1,
+  rejectPaidFlowCredits = false,
 } = {}) {
   const autoDecisions = String(flowOutputMode || "").toLowerCase() === "auto"
-    ? resolveAutoVideoSceneDecisions({ scenes, targetSeconds, videoFormat, introVideoClipCount, hybridIntroVideoSceneCount, speechSpeed })
+    ? resolveAutoVideoSceneDecisions({ scenes, targetSeconds, videoFormat, introVideoClipCount, hybridIntroVideoSceneCount, speechSpeed, rejectPaidFlowCredits })
     : null;
   return scenes.map((scene, index) => {
     const order = Number(scene.order || index + 1);
@@ -52,7 +56,7 @@ export function assignSceneOutputModes({
     const autoRejectedReason = autoDecisions?.rejected?.get(order) || "";
     const outputMode = autoDecisions
       ? (autoDecisions.has(order) ? "video" : "image")
-      : outputModeForScene({ sceneOrder: order, flowOutputMode, hybridIntroVideoSceneCount, speechSpeed });
+      : outputModeForScene({ sceneOrder: order, flowOutputMode, hybridIntroVideoSceneCount, speechSpeed, rejectPaidFlowCredits });
     return { ...scene, outputMode, flowOutputMode: outputMode, autoReason, autoRejectedReason };
   });
 }
@@ -68,12 +72,21 @@ export function resolveAutoVideoSceneDecisions({
   introVideoClipCount = 10,
   hybridIntroVideoSceneCount = 2,
   speechSpeed = 1,
+  rejectPaidFlowCredits = false,
 } = {}) {
   const normalized = scenes.map((scene, index) => ({
     ...scene,
     order: Number(scene.order || index + 1),
   }));
   if (!normalized.length) return new Map();
+  if (rejectPaidFlowCredits) {
+    const decisions = new Map();
+    decisions.rejected = new Map(normalized.map((scene) => [
+      scene.order,
+      "paid video credits rejected; using image mode",
+    ]));
+    return decisions;
+  }
   return String(videoFormat || "shorts") === "longform"
     ? resolveLongformAutoOrders({ scenes: normalized, targetSeconds, introVideoClipCount, speechSpeed })
     : resolveShortformAutoOrders({ scenes: normalized, targetSeconds, hybridIntroVideoSceneCount });

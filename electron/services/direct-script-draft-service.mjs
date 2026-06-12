@@ -31,6 +31,7 @@ export function buildDirectScriptDraft(job) {
     characterSheet: job.options.characterSheet,
     flowOutputMode: job.options.flowOutputMode || "video",
     hybridIntroVideoSceneCount: job.options.hybridIntroVideoSceneCount,
+    rejectPaidFlowCredits: Boolean(job.options.rejectPaidFlowCredits),
   });
   const guardedScenes = addHybridHookNarrationWarnings({
     scenes,
