@@ -84,7 +84,7 @@ Use `C:\Users\amd\AppData\Roaming\hermes\runtimes\pycapcut\.venv\Scripts\python.
 
 - [ ] **Step 2: Inspect builder result**
 
-Expected: success, 51 video segments (three replacements, one scene-3 remainder, and original scene 4 onward), one narration segment, existing caption cue count, 16:9 canvas, and muted video.
+Expected: success, 52 video segments (three replacements, one scene-3 remainder, and the original 48 entries from scene 4 onward), one narration segment, existing caption cue count, 16:9 canvas, and muted video.
 
 - [ ] **Step 3: Verify the generated draft**
 
