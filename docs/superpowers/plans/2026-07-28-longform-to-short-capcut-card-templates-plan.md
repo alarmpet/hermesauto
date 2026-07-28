@@ -14,9 +14,11 @@
 - 롱폼 원본과 기존 파생 결과는 수정하지 않고 `shorts-rebirth/<derivativeId>/templates/` 아래에만 새 결과를 쓴다.
 - 프리셋 ID는 `white-article`과 `black-immersive`만 1차 릴리스에서 허용한다.
 - 기본 프리셋은 `black-immersive`이며 `white-article`은 선택형 비교 프리셋으로 제공한다.
+- `black-immersive`는 화면 가장자리에서 12px 안쪽에 7px 금색 외곽선과 미디어 창의 5px 흰색 테두리를 사용한다.
 - 제목·본문·CTA는 유튜브 우측 상호작용 UI와 하단 채널 UI를 피하는 안전영역 안에 둔다.
 - 이미 자막이 구워진 미디어를 입력하면 별도 동적 자막 트랙을 만들지 않는다.
 - 자막이 없는 입력만 `captions.srt`를 동적 자막 트랙으로 추가한다.
+- 동적 자막은 균등 시간 분할을 금지하고 실제 한국어 발화의 단어·무음 경계에 정렬된 SRT만 사용한다.
 - 원본 오디오 출처 정책과 60~120초 길이 규칙은 기존 `shorts-derivative-manifest.json` 계약을 그대로 적용한다.
 - CapCut 앱 버전의 비공개 템플릿 ID나 마켓플레이스 템플릿에 의존하지 않는다.
 
