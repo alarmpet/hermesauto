@@ -13,6 +13,7 @@
 - 출력은 1080×1920, SAR 1:1, H.264 영상과 AAC 오디오를 가져야 한다.
 - 롱폼 원본과 기존 파생 결과는 수정하지 않고 `shorts-rebirth/<derivativeId>/templates/` 아래에만 새 결과를 쓴다.
 - 프리셋 ID는 `white-article`과 `black-immersive`만 1차 릴리스에서 허용한다.
+- 기본 프리셋은 `black-immersive`이며 `white-article`은 선택형 비교 프리셋으로 제공한다.
 - 제목·본문·CTA는 유튜브 우측 상호작용 UI와 하단 채널 UI를 피하는 안전영역 안에 둔다.
 - 이미 자막이 구워진 미디어를 입력하면 별도 동적 자막 트랙을 만들지 않는다.
 - 자막이 없는 입력만 `captions.srt`를 동적 자막 트랙으로 추가한다.
@@ -286,7 +287,7 @@ Expected: 모든 명령 exit code 0, 마지막 출력 `EIFFEL_CARD_TEMPLATE_ACCE
 
 - [ ] **Step 3: 기존 계획의 blur-background 기본값을 교체한다**
 
-기존 계획에서 최종 전달 기본값을 `white-article`로 바꾸고, 영상 행동성이 높은 후보에는 `black-immersive` 비교 미리보기를 생성하도록 연결한다. 기존 blur-background 렌더는 카드 템플릿의 미디어 입력 생성 단계로만 유지한다.
+기존 계획에서 최종 전달 기본값을 `black-immersive`로 바꾸고, 정보 카드형 표현이 더 적합한 후보에만 `white-article` 비교 미리보기를 생성하도록 연결한다. `black-immersive`의 상단 고정 제목과 하단 동적 자막은 모두 굵은 글꼴을 사용하며 별도 하단 CTA는 생성하지 않는다. 기존 blur-background 렌더는 카드 템플릿의 미디어 입력 생성 단계로만 유지한다.
 
 - [ ] **Step 4: 커밋한다**
 
@@ -301,4 +302,3 @@ git commit -m "test: accept reusable Eiffel card shorts"
 - Black immersive prototype: `eiffel-short-black-immersive-template.mp4`
 - Both prototypes were rendered at 1080×1920, SAR 1:1, H.264/AAC, duration 113.5 seconds.
 - The 2/60/110-second frames confirmed that the source captions remain visible inside the media window and fixed copy stays outside it.
-
