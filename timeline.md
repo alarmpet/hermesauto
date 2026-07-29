@@ -517,3 +517,10 @@
 - Added contract/offline verification levels, expiring baseline policy, three-tier QA checks, and credential-free reusable GitHub Actions workflows. Live provider and CapCut GUI acceptance remain separate and require explicit approval.
 - Token benchmark: four scenarios passed with estimated median reduction `95.57%`; measurement is `ceil(characters/4)`, not direct model token telemetry.
 - Verification: `npm.cmd run check:hermes-video-contract` (8 checks passed), `npm.cmd run check:hermes-video-offline` (4 checks passed), `npm.cmd run benchmark:hermes-video-tokens` (4/4 scenarios passed), `npm.cmd run electron:pack` (installer built), `npm.cmd test` (full suite passed).
+
+## 2026-07-30 - Fix - Portable FFmpeg discovery in CI
+
+- Reproduced the GitHub Actions-only longform resume failure: the resolver selected `C:/Users/amd/hermes/node_modules/ffmpeg-static/ffmpeg.exe` instead of the current checkout dependency, so CI could not probe a valid 1920x1080 legacy clip.
+- Removed the developer-machine path and resolve the installed `ffmpeg-static` package directly, preserving explicit, environment, packaged, PATH, and system fallbacks.
+- Added `check-ffmpeg-bin-resolver-contract.mjs` to the offline video suite.
+- Verification: `node scripts/check-ffmpeg-bin-resolver-contract.mjs`, `node scripts/check-longform-scene-resume-contract.mjs`, `npm.cmd run check:hermes-video-offline`, `npm.cmd test`.
