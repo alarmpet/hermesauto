@@ -1,0 +1,7 @@
+{
+  "title": "Partial media fixture",
+  "scenes": [
+    { "order": 1, "narration": "first", "outputMode": "image" },
+    { "order": 2, "narration": "second", "outputMode": "image" }
+  ]
+}

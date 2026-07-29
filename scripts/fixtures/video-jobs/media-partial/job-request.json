@@ -1,0 +1,9 @@
+{
+  "id": "youtube-media-partial",
+  "sourceType": "keyword",
+  "sourceValue": "fixture",
+  "options": {
+    "profileId": "history-longform-capcut-15m-v1",
+    "deliveryMode": "capcut-editable"
+  }
+}

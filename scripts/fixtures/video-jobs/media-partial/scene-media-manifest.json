@@ -1,0 +1,18 @@
+{
+  "ok": false,
+  "version": 1,
+  "scenes": [
+    {
+      "order": 1,
+      "status": "completed",
+      "path": "scene-1.fixture",
+      "sceneOutputMode": "image"
+    },
+    {
+      "order": 2,
+      "status": "failed",
+      "sceneOutputMode": "image",
+      "failureCode": "FLOW_MODE_MISMATCH"
+    }
+  ]
+}
