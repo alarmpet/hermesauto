@@ -18,6 +18,10 @@ import {
 } from "./electron/services/longform-chapter-renderer.mjs";
 import { resolveTitleOverlayText } from "./electron/services/title-overlay-text-resolver.mjs";
 import { probeVideoDimensions, resolveSceneVideoDimensions } from "./electron/services/scene-video-normalizer.mjs";
+import {
+  createGenerationKey,
+  hashFileSha256,
+} from "./electron/services/video-artifact-fingerprints.mjs";
 
 const MIN_SCENES = 3;
 const ROOT = process.env.HERMES_ROOT || "C:/Users/amd/hermes";
@@ -517,7 +521,26 @@ export async function generateYouTubeWorkflowAssets(job, context = {}) {
       emit({ type: "flow-scene-started", jobId: job.id, scene });
       try {
         const media = await context.generateSceneMedia({ job, draft, scene, jobDir, renderOptions });
-        const mediaRecord = { order: scene.order, ...media };
+        const sourceContentHash = media.path && existsSync(media.path)
+          ? hashFileSha256(media.path)
+          : "";
+        const generationKey = createGenerationKey({
+          profileVersion: Number(job.options.profileVersion || 1),
+          provider: media.provider || job.options.mediaProvider || "unknown",
+          model: media.model || job.options.flowImageModel || "",
+          normalizedPrompt: String(scene.image_prompt || "").replace(/\s+/g, " ").trim(),
+          settings: {
+            outputMode,
+            aspectRatio: job.options.aspectRatio,
+          },
+        });
+        const mediaRecord = {
+          order: scene.order,
+          ...media,
+          sourceContentHash,
+          generationKey,
+          fingerprintVersion: 1,
+        };
         sceneMedia.push(mediaRecord);
         upsertSceneMediaManifest(sceneMediaManifest, {
           ...mediaRecord,
@@ -651,6 +674,8 @@ function findReusableSceneMedia(manifest, scene, outputMode, job = {}) {
   if (!record || record.status !== "completed") return null;
   if ((record.sceneOutputMode || record.outputMode || "") !== outputMode) return null;
   if (!record.path || !existsSync(record.path)) return null;
+  if (record.sourceContentHash && hashFileSha256(record.path) !== record.sourceContentHash) return null;
+  if (job.options?.profileId === "history-longform-capcut-15m-v1" && !record.sourceContentHash) return null;
   if (!isReusableAspectMatch(record, job)) return null;
   return {
     ...record,
