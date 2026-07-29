@@ -23,8 +23,8 @@ const directJob = normalizeYouTubeJobRequest({
   options: { flowOutputMode: "hybrid", hybridIntroVideoSceneCount: 1 },
 });
 const directDraft = buildDirectScriptDraft(directJob);
-assert.equal(directDraft.scenes[0].outputMode, "video", "first hybrid scene should be video");
-assert.ok(directDraft.scenes[0].hybrid_hook_narration_warning, "overlong opening video scene should carry a warning");
+assert.equal(directDraft.scenes[0].outputMode, "image", "paid-credit rejection should prevent hybrid video scenes");
+assert.equal(directDraft.scenes[0].hybrid_hook_narration_warning, undefined, "image scenes should not carry a video narration warning");
 assert.equal(directDraft.scenes[1].outputMode, "image", "remaining hybrid scenes should be image when intro count is one");
 
 console.log("Hybrid hook narration guard contract OK");
