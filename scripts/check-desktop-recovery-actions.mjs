@@ -17,6 +17,9 @@ assert.match(app, /retryFailedScenesBtn/, "renderer should wire retry failed sce
 assert.match(app, /renderExistingAssetsBtn/, "renderer should wire render existing assets button");
 assert.match(app, /youtubeRetryFailedScenes/, "renderer should invoke retry failed scenes IPC");
 assert.match(app, /youtubeRenderExistingAssets/, "renderer should invoke render existing assets IPC");
+assert.match(app, /applyStructuredRecoveryActions/, "renderer should map structured recovery actions");
+assert.match(app, /RETRY_FAILED_SCENES/, "renderer should map the retry action id");
+assert.match(app, /RENDER_EXISTING_ASSETS/, "renderer should map the render action id");
 assert.match(preload, /youtubeRetryFailedScenes/, "preload should expose retry failed scenes IPC");
 assert.match(preload, /youtubeRenderExistingAssets/, "preload should expose render existing assets IPC");
 assert.match(main, /ipcMain\.handle\("youtube:retryFailedScenes"/, "main should handle retry failed scenes");
