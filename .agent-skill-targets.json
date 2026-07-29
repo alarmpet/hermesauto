@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "targets": {
+    "codex": ".generated-agent-skills/codex",
+    "claude": ".generated-agent-skills/claude",
+    "gemini": ".generated-agent-skills/gemini"
+  }
+}

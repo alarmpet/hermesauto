@@ -12,6 +12,8 @@
     "check:video-profiles": "node scripts/check-video-profile-contract.mjs",
     "hermes:video": "node scripts/hermes-video.mjs",
     "check:hermes-video-cli": "node scripts/check-hermes-video-cli-contract.mjs",
+    "sync:agent-skills": "node scripts/sync-agent-skills.mjs --target all",
+    "check:agent-skill-sync": "node scripts/check-agent-skill-sync-contract.mjs",
     "check:desktop-progress": "node scripts/check-desktop-progress-feedback.mjs && node scripts/check-flow-create-keyboard-fallback.mjs",
     "check:packaged-render-runner": "node scripts/check-packaged-render-runner.mjs && node scripts/check-packaged-render-import-graph.mjs && node scripts/check-packaged-auth-account-switching.mjs",
     "check:visual-storytelling": "node scripts/check-visual-storytelling-prompts.mjs && node scripts/check-stickmanplus-history-preset.mjs && node scripts/check-stickmanplus-longform-history.mjs && node scripts/check-local-first-no-llm-lane.mjs",
