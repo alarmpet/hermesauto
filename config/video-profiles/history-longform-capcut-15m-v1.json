@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "history-longform-capcut-15m-v1",
+  "durationSeconds": 900,
+  "aspectRatio": "16:9",
+  "deliveryMode": "capcut-editable",
+  "intro": {
+    "clipCount": 3,
+    "clipSeconds": 10,
+    "totalSeconds": 30
+  },
+  "visualPacing": {
+    "early": {
+      "start": 30,
+      "end": 180,
+      "min": 8,
+      "target": 10,
+      "max": 15
+    },
+    "deep": {
+      "start": 180,
+      "end": 900,
+      "min": 16,
+      "target": 20,
+      "max": 30
+    }
+  },
+  "tts": {
+    "engine": "supertonic3",
+    "voice": "male_30_announcer",
+    "speed": 1.02
+  },
+  "captions": {
+    "maxCharactersPerLine": 25
+  },
+  "cachePolicy": {
+    "sourceHash": "sha256",
+    "maxSourceReuse": 2
+  },
+  "requiresMeasuredTimeline": true
+}

@@ -1,3 +1,5 @@
+import { createVideoAction, normalizeVideoEvent } from "./video-domain-events.mjs";
+
 export const JOB_PROGRESS_PHASES = [
   { id: "submitted", label: "작업 접수", percent: 5, message: "작업을 접수했습니다." },
   { id: "research", label: "Gemini 자료 수집", percent: 12, message: "Gemini에서 키워드 또는 URL 자료를 확인하는 중입니다." },
@@ -56,6 +58,21 @@ export function createFailureProgressEvent({ jobId = "", message = "", details =
     : renderRunnerFailure
     ? renderRunnerActionRequired()
     : null;
+  const nextActions = flowAbnormalActivityFailure || flowRateLimitFailure
+    ? [createVideoAction({
+        actionId: "AUTHENTICATE_PROVIDER",
+        targetStage: "media",
+        uiLabel: "제공자 인증 및 세션 복구",
+        reason: message || "Provider authentication or cooldown is required.",
+      })]
+    : finalOutputQaFailure
+    ? [createVideoAction({
+        actionId: "RENDER_EXISTING_ASSETS",
+        targetStage: "render",
+        uiLabel: "기존 자산 다시 렌더링",
+        reason: qaReason || "Final output QA failed.",
+      })]
+    : [];
   return createJobProgressEvent({
     jobId,
     phase,
@@ -79,6 +96,7 @@ export function createFailureProgressEvent({ jobId = "", message = "", details =
       failureCodes: flowRateLimitFailure ? ["FLOW_RATE_LIMITED"] : flowAbnormalActivityFailure ? ["FLOW_ABNORMAL_ACTIVITY"] : qaFailureCodes,
     },
     actionRequired,
+    nextActions,
   });
 }
 
@@ -89,9 +107,10 @@ export function createJobProgressEvent({
   message,
   details = {},
   actionRequired = null,
+  nextActions = [],
 }) {
   const phaseMeta = JOB_PROGRESS_PHASES.find((item) => item.id === phase);
-  return {
+  return normalizeVideoEvent({
     type: "job-progress",
     jobId,
     phase,
@@ -101,8 +120,9 @@ export function createJobProgressEvent({
     message: message || phaseMeta?.message || phaseMeta?.label || phase,
     details,
     actionRequired,
+    nextActions,
     updatedAt: new Date().toISOString(),
-  };
+  });
 }
 
 export function emitJobProgress(emit, event) {

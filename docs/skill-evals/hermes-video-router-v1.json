@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "method": "static-contract",
+  "note": "No model-token harness was available; character counts are not represented as tokens.",
+  "cases": [
+    {"prompt":"15분 야사 영상을 새로 만들어","selectedSkill":"creating-hermes-video-job","command":"job create","sourceFilesRead":[]},
+    {"prompt":"scene 18에서 실패한 작업 이어서 해","selectedSkill":"resuming-hermes-video-job","command":"inspect then resume","sourceFilesRead":[]},
+    {"prompt":"CapCut 드래프트 검증해","selectedSkill":"validating-hermes-video","command":"verify","sourceFilesRead":[]},
+    {"prompt":"Flow 이미지 생성만 다시 해","selectedSkill":"generating-hermes-media","command":"inspect then run --until media","sourceFilesRead":[]},
+    {"prompt":"대본까지만 생성해","selectedSkill":"generating-hermes-draft","command":"inspect then run --until draft","sourceFilesRead":[]}
+  ]
+}

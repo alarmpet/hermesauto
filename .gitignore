@@ -1,4 +1,5 @@
 node_modules/
+.generated-agent-skills/
 dist-electron/
 .aistudio-browser-profile/
 outputs/

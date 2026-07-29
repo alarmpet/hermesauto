@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import ffmpegStaticPath from "ffmpeg-static";
 
 function canExecuteFfmpeg(candidate = "") {
   if (!candidate) return false;
@@ -25,7 +26,7 @@ export function resolveFfmpegBin(candidate = "") {
     candidate,
     process.env.FFMPEG_PATH,
     process.resourcesPath ? join(process.resourcesPath, "app.asar.unpacked", "node_modules", "ffmpeg-static", "ffmpeg.exe") : "",
-    "C:/Users/amd/hermes/node_modules/ffmpeg-static/ffmpeg.exe",
+    ffmpegStaticPath,
     ...pathCandidates,
     "ffmpeg",
   ].filter(Boolean);

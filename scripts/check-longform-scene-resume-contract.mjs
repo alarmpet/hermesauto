@@ -63,6 +63,11 @@ assert.ok(existsSync(manifestPath), "partial run should persist scene-media-mani
 const partialManifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 assert.equal(partialManifest.scenes.find((item) => item.order === 1)?.status, "completed");
 assert.equal(partialManifest.scenes.find((item) => item.order === 2)?.status, "failed");
+assert.match(
+  partialManifest.scenes.find((item) => item.order === 1)?.sourceContentHash || "",
+  /^[a-f0-9]{64}$/,
+  "completed media should persist its source content hash",
+);
 
 const secondRunCalls = [];
 const assets = await generateYouTubeWorkflowAssets(job, {
@@ -88,6 +93,26 @@ assert.equal(assets.sceneMedia.length, assets.draft.scenes.length, "resume run s
 
 const finalManifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 assert.ok(finalManifest.scenes.every((item) => item.status === "completed"), "successful rerun should complete every scene");
+
+await writeFile(join(jobDir, "scene_1.mp4"), "tampered media");
+const tamperedRunCalls = [];
+await generateYouTubeWorkflowAssets(job, {
+  outputDir: root,
+  jobDir,
+  emit: () => {},
+  generateSceneMedia: async ({ scene }) => {
+    tamperedRunCalls.push(scene.order);
+    const mediaPath = join(jobDir, `scene_${scene.order}.mp4`);
+    await writeFile(mediaPath, "restored media");
+    return {
+      path: mediaPath,
+      contentType: "video/mp4",
+      flowOutputMode: scene.outputMode,
+      sceneOutputMode: scene.outputMode,
+    };
+  },
+});
+assert.ok(tamperedRunCalls.includes(1), "a source hash mismatch must regenerate the replaced scene asset");
 
 const landscapeJob = normalizeYouTubeJobRequest({
   sourceType: "script",

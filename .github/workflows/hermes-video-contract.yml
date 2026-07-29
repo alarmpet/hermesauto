@@ -1,0 +1,10 @@
+name: Hermes Video Contract
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  offline:
+    uses: ./.github/workflows/reusable-hermes-video-offline.yml

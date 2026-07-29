@@ -28,6 +28,7 @@ import { buildDesktopJobRequest, createYouTubeJob, retryThumbnailForJob, writeDe
 import { uploadVideoToYouTube } from "../pipeline/youtube-upload.mjs";
 import { mirrorWorkflowEventToDb } from "../workflow-db-events.mjs";
 import { createFailureProgressEvent } from "./services/job-progress-events.mjs";
+import { createVideoOperationService } from "./services/video-operation-service.mjs";
 import { stopAllProviders } from "./services/external-provider-registry.mjs";
 import { createFlowRequestPacer } from "./services/flow-request-pacer.mjs";
 import { buildFlowAccountRouter } from "./services/flow-account-router.mjs";
@@ -551,15 +552,21 @@ ipcMain.handle("youtube:createJob", async (_event, input) => {
         });
       }
     }
-    const result = await createYouTubeJob(inputWithId, {
-      paths,
+    const videoOperations = createVideoOperationService({
       emit: sendJobEvent,
-      outputDir: OUTPUT_DIR,
-      jobDir: activeJobDir,
-      ffmpegBin: FFMPEG_BIN,
-      chromePath: config.chromePath,
-      config,
+      dependencies: {
+        createJob: (jobInput, { emit }) => createYouTubeJob(jobInput, {
+          paths,
+          emit,
+          outputDir: OUTPUT_DIR,
+          jobDir: activeJobDir,
+          ffmpegBin: FFMPEG_BIN,
+          chromePath: config.chromePath,
+          config,
+        }),
+      },
     });
+    const result = await videoOperations.createJob({ input: inputWithId });
     if (result.finalVideo?.jobDir) await writeDesktopResult(result.finalVideo.jobDir, result);
     latestCompletedJob = result;
     await upsertJob(paths.jobsDir, {

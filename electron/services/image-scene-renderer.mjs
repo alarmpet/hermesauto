@@ -2,6 +2,10 @@ import { dirname } from "node:path";
 import { resolveFfmpegBin } from "./ffmpeg-bin-resolver.mjs";
 import { resolveSceneVideoDimensions } from "./scene-video-normalizer.mjs";
 import { renderStableImageSequenceClip } from "./stable-image-sequence-renderer.mjs";
+import {
+  createRenderKey,
+  hashFileSha256,
+} from "./video-artifact-fingerprints.mjs";
 
 export async function renderImageSceneClip({
   ffmpegBin,
@@ -13,6 +17,8 @@ export async function renderImageSceneClip({
   fps = 30,
   jobDir,
   aspectRatio = "9:16",
+  cropAnchor = "center",
+  overlays = {},
 }) {
   const resolvedFfmpegBin = resolveFfmpegBin(ffmpegBin);
   if (!resolvedFfmpegBin) throw new Error("ffmpegBin is required for image scene rendering.");
@@ -49,5 +55,14 @@ export async function renderImageSceneClip({
     aspectRatio: dimensions.aspectRatio,
     normalizedWidth: dimensions.width,
     normalizedHeight: dimensions.height,
+    sourceContentHash: hashFileSha256(imagePath),
+    renderKey: createRenderKey({
+      sourceContentHash: hashFileSha256(imagePath),
+      timelineSlice: { startSeconds: 0, endSeconds: duration },
+      motion: { preset: motionPreset, strength: motionStrength },
+      crop: cropAnchor,
+      overlays,
+      rendererVersion: 1,
+    }),
   };
 }

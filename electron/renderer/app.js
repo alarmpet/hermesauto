@@ -1246,6 +1246,31 @@ function updateRecoveryActions() {
   if (retryThumbnailBtn) retryThumbnailBtn.disabled = disabled;
 }
 
+function applyStructuredRecoveryActions(nextActions = []) {
+  const actions = Array.isArray(nextActions) ? nextActions : [];
+  const retryAction = actions.find((action) => action.actionId === "RETRY_FAILED_SCENES");
+  const renderAction = actions.find((action) => action.actionId === "RENDER_EXISTING_ASSETS");
+  if (retryAction && retryFailedScenesBtn) {
+    retryFailedScenesBtn.disabled = !selectedJobId;
+    retryFailedScenesBtn.dataset.actionId = retryAction.actionId;
+    retryFailedScenesBtn.textContent = retryAction.uiLabel;
+  }
+  if (renderAction && renderExistingAssetsBtn) {
+    renderExistingAssetsBtn.disabled = !selectedJobId;
+    renderExistingAssetsBtn.dataset.actionId = renderAction.actionId;
+    renderExistingAssetsBtn.textContent = renderAction.uiLabel;
+  }
+  for (const action of actions) {
+    if (!["RETRY_FAILED_SCENES", "RENDER_EXISTING_ASSETS"].includes(action.actionId)) {
+      appendLog("Structured recovery action available", {
+        actionId: action.actionId,
+        targetStage: action.targetStage,
+        uiLabel: action.uiLabel,
+      });
+    }
+  }
+}
+
 async function restoreConsoleHistory(jobId) {
   if (!jobId || !window.hermes.workflowRecentEvents) return;
   const events = await window.hermes.workflowRecentEvents(jobId);
@@ -1534,6 +1559,7 @@ function updateProgressUi(event) {
     progressActionRequired.hidden = false;
     progressActionRequired.textContent = `${event.actionRequired.title}: ${event.actionRequired.message}`;
   }
+  applyStructuredRecoveryActions(event.nextActions);
   updateQaSummary(event.details || {});
   updateArtifactPanel(event.details || {});
 }
