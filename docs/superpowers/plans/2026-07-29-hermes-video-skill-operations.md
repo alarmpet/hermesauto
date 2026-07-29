@@ -796,3 +796,12 @@ This program is complete only when:
 - Codex, Claude and Gemini generated targets match the canonical skill hashes.
 - the benchmark reports whether the 50% median token reduction goal was met.
 - live provider and CapCut GUI acceptance remain explicitly separate and are not represented as automated success.
+
+## Implementation Status (2026-07-29)
+
+- Tasks 1–9 implemented on `codex/video-skill-operations`.
+- The clean worktree did not contain the uncommitted `capcut-job-service.mjs`, intro-assets, narration-assets, handoff, or edit-plan files named by the original Task 5/9 checklist. Their intended guarantees were implemented and tested through the available measured timeline/workflow, longform production, and resume contracts without copying unrelated dirty main-worktree files.
+- Contract suite: 8 checks passed. Offline suite: 4 checks passed. Full `npm test` passed.
+- Electron NSIS packaging passed after the initial 120-second tool timeout was rerun with a 360-second limit.
+- Token reduction target met at an estimated median 95.57%; this is a character-based estimate, not direct model token telemetry.
+- Live provider spending, authentication, upload, and CapCut GUI acceptance were not run and remain explicit approval gates.

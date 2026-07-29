@@ -508,3 +508,12 @@
 - Hardened paid/video credit rejection so it scans visible text nodes as well as buttons, resolves their clickable ancestor, prioritizes exact reject labels, and penalizes approval/confirm candidates.
 - Repacked the Electron app after closing the locked packaged Hermes process and recreated the desktop shortcut to launch the updated build.
 - Verification: `node --check automation/google-flow-media.mjs`, `node scripts/check-flow-credit-confirmation-guard.mjs`, `node scripts/check-flow-video-credit-reject-contract.mjs`, `npm.cmd run check:flow-policy-safety`, `npm.cmd run electron:pack`, `node scripts/check-packaged-runtime-contract.mjs`, `powershell -ExecutionPolicy Bypass -File scripts/create-desktop-shortcut.ps1`, `powershell -ExecutionPolicy Bypass -File scripts/check-shortcut.ps1`.
+
+## 2026-07-29 - Feature - Portable Hermes video operations
+
+- Added a versioned 15-minute CapCut profile, structured recovery actions, bounded job inspection, layered artifact fingerprints, and measured-narration visual planning.
+- Added one shared video operation service used directly by Electron and the `hermes:video` JSON/JSON-stream CLI.
+- Added seven canonical Agent Skills plus deterministic repository-local Codex/Claude/Gemini synchronization.
+- Added contract/offline verification levels, expiring baseline policy, three-tier QA checks, and credential-free reusable GitHub Actions workflows. Live provider and CapCut GUI acceptance remain separate and require explicit approval.
+- Token benchmark: four scenarios passed with estimated median reduction `95.57%`; measurement is `ceil(characters/4)`, not direct model token telemetry.
+- Verification: `npm.cmd run check:hermes-video-contract` (8 checks passed), `npm.cmd run check:hermes-video-offline` (4 checks passed), `npm.cmd run benchmark:hermes-video-tokens` (4/4 scenarios passed), `npm.cmd run electron:pack` (installer built), `npm.cmd test` (full suite passed).

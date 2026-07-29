@@ -371,6 +371,22 @@ function analyzeRenderEffectApplication({ renderOptions = {}, renderReport = {},
   return issues;
 }
 
+export function analyzeThreeTierTimeline(jobDir) {
+  const required = [
+    ["intro-assets.json", "THREE_TIER_INTRO_ASSETS_MISSING"],
+    ["measured-visual-timeline.json", "THREE_TIER_MEASURED_TIMELINE_MISSING"],
+    ["scene-media-manifest.json", "THREE_TIER_MEDIA_MANIFEST_MISSING"],
+  ];
+  const failureCodes = required
+    .filter(([name]) => !existsSync(join(jobDir, name)))
+    .map(([, code]) => code);
+  const captionPath = ["caption-timing.json", "captions.json", "subtitle-timeline.json"]
+    .map((name) => join(jobDir, name))
+    .find(existsSync);
+  if (!captionPath) failureCodes.push("THREE_TIER_CAPTION_TIMING_MISSING");
+  return { ok: failureCodes.length === 0, failureCodes };
+}
+
 export function analyzeYouTubeOutput(jobDirInput) {
   const jobDir = resolve(jobDirInput || ".");
   const draft = readJsonIfExists(join(jobDir, "draft.json"));
@@ -393,6 +409,13 @@ export function analyzeYouTubeOutput(jobDirInput) {
   };
   const qualityWarnings = [];
   const improvementWarnings = [];
+
+  const profileId = cleanText(job.profileId || job.options?.profileId || renderOptions.profileId);
+  if (profileId === "history-longform-capcut-15m-v1") {
+    const threeTier = analyzeThreeTierTimeline(jobDir);
+    failureCodes.push(...threeTier.failureCodes);
+    details.threeTierTimeline = threeTier;
+  }
 
   const effectApplicationIssues = analyzeRenderEffectApplication({ renderOptions, renderReport, reportScenes });
   if (effectApplicationIssues.length) {
