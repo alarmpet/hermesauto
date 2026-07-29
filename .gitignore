@@ -58,6 +58,7 @@ scene_*_flow_*.json
 # Agent/private workspace mirrors
 obsi/
 AI-Sessions/raw/
+.worktrees/
 
 # Local secrets
 .supabase-access-token
