@@ -22,6 +22,8 @@ import {
   createGenerationKey,
   hashFileSha256,
 } from "./electron/services/video-artifact-fingerprints.mjs";
+import { buildMeasuredVisualTimeline } from "./electron/services/measured-visual-timeline.mjs";
+import { loadVideoProfile } from "./scripts/lib/video-profile-loader.mjs";
 
 const MIN_SCENES = 3;
 const ROOT = process.env.HERMES_ROOT || "C:/Users/amd/hermes";
@@ -485,10 +487,41 @@ export async function generateYouTubeWorkflowAssets(job, context = {}) {
   const metadataPath = join(jobDir, "metadata.json");
   const longformMediaPlanPath = join(jobDir, "longform-media-plan.json");
   const sceneMediaManifestPath = join(jobDir, "scene-media-manifest.json");
+  const measuredVisualTimelinePath = join(jobDir, "measured-visual-timeline.json");
 
   await writeFile(requestPath, JSON.stringify(job, null, 2), "utf8");
   await writeFile(draftPath, JSON.stringify(draft, null, 2), "utf8");
   await writeFile(renderOptionsPath, JSON.stringify(renderOptions, null, 2), "utf8");
+  let narration = null;
+  let measuredVisualTimeline = null;
+  if (job.options.profileId) {
+    const profile = loadVideoProfile(job.options.profileId);
+    if (profile.requiresMeasuredTimeline) {
+      if (job.options.deliveryMode !== "capcut-editable") {
+        const error = new Error("MEASURED_TIMELINE_PROFILE_REQUIRES_CAPCUT");
+        error.code = "MEASURED_TIMELINE_PROFILE_REQUIRES_CAPCUT";
+        throw error;
+      }
+      if (typeof context.prepareCapcutNarration !== "function") {
+        const error = new Error("MEASURED_TTS_REQUIRED");
+        error.code = "MEASURED_TTS_REQUIRED";
+        throw error;
+      }
+      narration = await context.prepareCapcutNarration(job, { jobDir, draft }, context);
+      measuredVisualTimeline = buildMeasuredVisualTimeline({
+        profile,
+        draftScenes: draft.scenes,
+        narrationManifest: narration,
+      });
+      draft = {
+        ...draft,
+        duration_seconds: profile.durationSeconds,
+        scenes: measuredVisualTimeline.beats,
+      };
+      await writeFile(measuredVisualTimelinePath, JSON.stringify(measuredVisualTimeline, null, 2), "utf8");
+      await writeFile(draftPath, JSON.stringify(draft, null, 2), "utf8");
+    }
+  }
   const longformMediaPlan = isLongformJob(job) ? buildLongformMediaPlan({ job, draft }) : null;
   const longformChapterPlan = await createLongformChapterAssets({ job, draft, renderOptions, jobDir });
   if (longformMediaPlan) {
@@ -630,6 +663,9 @@ export async function generateYouTubeWorkflowAssets(job, context = {}) {
     sceneMedia,
     longformMediaPlan,
     longformChapterPlan,
+    narration,
+    measuredVisualTimeline,
+    measuredVisualTimelinePath: measuredVisualTimeline ? measuredVisualTimelinePath : "",
   };
 }
 
