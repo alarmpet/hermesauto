@@ -96,9 +96,36 @@ CLI가 담당하는 일:
 - 실패 코드와 다음 실행 명령 생성
 - JSON 형식의 기계 판독 결과 출력
 
+### 공용 application service와 실행 표면 분리
+
+CLI를 Electron에서 다시 subprocess로 실행하지 않는다. `scripts/hermes-video.mjs`와 Electron IPC handler가 동일한 application service를 호출한다. application service는 현재 `emitJobProgress()`와 호환되는 event sink를 인자로 받으며, CLI는 이를 NDJSON 또는 최종 JSON으로 직렬화하고 Electron은 `youtube:event`로 전달한다.
+
+이 구조는 다음을 보장한다.
+
+- Electron과 CLI가 job 상태 판정 코드를 공유한다.
+- Desktop 작업에서 별도 CLI 프로세스가 동일 job을 중복 실행하지 않는다.
+- 로그인, CAPTCHA, 수동 업로드와 CapCut 사람 검수 상태가 UI와 CLI에서 동일 failure/action 계약을 사용한다.
+- 기존 BrowserWindow, CDP와 persistent profile의 소유권은 Electron/automation service에 유지한다.
+
 ### 실패 시 닫힘
 
 지원되지 않는 profile, 누락된 입력, 불일치한 해시, 자격 없는 CapCut 런타임은 임의의 다른 경로로 폴백하지 않는다. CLI는 안정된 오류 코드와 `nextActions`를 반환한다.
+
+### 2단계 pacing
+
+1차 scene plan은 대본과 예상 발화 길이로 prompt와 필요한 생성 자산을 계획한다. CapCut 편집 경로는 기존처럼 `prepareCapcutNarration()`을 미디어 생성 전에 실행한 뒤, 측정된 narration segment를 사용해 adaptive visual timeline을 다시 만든다. 미디어 생성과 CapCut handoff는 이 measured timeline을 소비한다.
+
+일반 Hermes render 경로의 기존 순서는 이번 변경으로 강제 전환하지 않는다. measured narration을 요구하는 profile만 `MEASURED_TTS_REQUIRED`로 fail closed 한다.
+
+### 계층별 캐시 키
+
+원본 생성 자산과 타임라인에 종속되는 파생 렌더를 같은 키로 캐시하지 않는다.
+
+- `sourceContentHash = SHA256(raw file bytes)`
+- `generationKey = SHA256(profile version + provider + model + normalized prompt + generation settings)`
+- `renderKey = SHA256(sourceContentHash + measured timeline slice + motion/crop + overlays + renderer version)`
+
+resume은 manifest에 기록된 실제 `sourceContentHash`와 현재 파일을 비교한다. prompt나 provider가 달라지면 생성 자산을 재생성하고, TTS 길이·자막·타이틀·모션만 달라지면 원본 자산은 유지하면서 파생 렌더만 무효화한다.
 
 ### 모델 독립성
 
@@ -148,7 +175,9 @@ scripts/
     video-command-router.mjs
     video-job-inspector.mjs
     video-profile-loader.mjs
-    video-verification-runner.mjs
+  video-verification-runner.mjs
+    video-operation-service.mjs
+    video-domain-events.mjs
   sync-agent-skills.mjs
   check-hermes-video-skill-contract.mjs
   check-hermes-video-cli-contract.mjs
@@ -211,6 +240,9 @@ hermes-video skills sync --target codex|claude|gemini|all
   "failureCodes": [],
   "nextActions": [
     {
+      "actionId": "RETRY_FAILED_SCENES",
+      "targetStage": "media",
+      "uiLabel": "실패 장면 미디어 재생성",
       "command": "npm run hermes:video -- resume C:\\jobs\\youtube-...",
       "reason": "scene 18 media is missing"
     }
@@ -218,7 +250,7 @@ hermes-video skills sync --target codex|claude|gemini|all
 }
 ```
 
-사람용 설명은 stderr 또는 `report --format markdown`에서 생성한다. 다른 LLM은 JSON만 읽어도 다음 행동을 결정할 수 있어야 한다.
+사람용 설명은 stderr 또는 `report --format markdown`에서 생성한다. 다른 LLM은 JSON만 읽어도 다음 행동을 결정할 수 있어야 한다. `actionId`, `targetStage`와 `uiLabel`은 CLI와 기존 Desktop 복구 버튼이 공유한다.
 
 ## 상태와 데이터 흐름
 
@@ -229,7 +261,7 @@ user intent
   -> validated job request
   -> research and draft
   -> measured TTS
-  -> adaptive visual timeline
+  -> measured adaptive visual timeline
   -> generated/reused media
   -> CapCut handoff or Hermes render
   -> contract QA
@@ -248,7 +280,7 @@ user intent
 - job 상태 전달에는 전체 대화 대신 job ID, profile ID, 현재 stage와 failure codes만 사용한다.
 - prompt는 template ID와 입력 변수로 저장하고 동일한 장문 system prompt를 매번 job manifest에 복제하지 않는다.
 - 대형 파일의 관련 범위는 CLI가 symbol과 line range로 반환한다.
-- 동일 자산은 SHA-256 content-addressed cache로 재사용하고 provenance를 유지한다.
+- 동일 원본 자산은 `generationKey`와 `sourceContentHash`로 재사용하고, timeline 종속 렌더는 별도 `renderKey`로 무효화한다.
 
 ## 오류 처리
 
@@ -261,6 +293,8 @@ user intent
 - `CAPCUT_RUNTIME_UNQUALIFIED`: Hermes 폴백 없이 중단해야 하는 profile 여부 표시
 - `MEASURED_TTS_REQUIRED`: adaptive timeline 생성 전 CapCut 조립 차단
 - `HUMAN_ACCEPTANCE_REQUIRED`: 자동 검증과 사람 검수 항목 분리
+
+오류별 `nextActions`는 자유 형식 문자열이 아니라 등록된 `actionId`를 사용한다. 초기 registry는 `RETRY_FAILED_SCENES`, `RENDER_EXISTING_ASSETS`, `AUTHENTICATE_PROVIDER`, `UPLOAD_MANUAL_MEDIA`, `REBUILD_CAPCUT_HANDOFF`, `RUN_LIVE_ACCEPTANCE`로 제한한다.
 
 ## 검증 전략
 
