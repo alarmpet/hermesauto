@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hermes.local/schemas/video-profile-v1.json",
+  "title": "Hermes Video Profile v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "durationSeconds",
+    "aspectRatio",
+    "deliveryMode",
+    "intro",
+    "visualPacing",
+    "tts",
+    "captions",
+    "cachePolicy",
+    "requiresMeasuredTimeline"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "durationSeconds": { "type": "number", "exclusiveMinimum": 0 },
+    "aspectRatio": { "enum": ["16:9", "9:16"] },
+    "deliveryMode": { "enum": ["capcut-editable", "hermes-render"] },
+    "intro": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["clipCount", "clipSeconds", "totalSeconds"],
+      "properties": {
+        "clipCount": { "type": "integer", "minimum": 0 },
+        "clipSeconds": { "type": "number", "minimum": 0 },
+        "totalSeconds": { "type": "number", "minimum": 0 }
+      }
+    },
+    "visualPacing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["early", "deep"],
+      "properties": {
+        "early": { "$ref": "#/$defs/pacingRange" },
+        "deep": { "$ref": "#/$defs/pacingRange" }
+      }
+    },
+    "tts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["engine", "voice", "speed"],
+      "properties": {
+        "engine": { "type": "string", "minLength": 1 },
+        "voice": { "type": "string", "minLength": 1 },
+        "speed": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "captions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxCharactersPerLine"],
+      "properties": {
+        "maxCharactersPerLine": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "cachePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceHash", "maxSourceReuse"],
+      "properties": {
+        "sourceHash": { "const": "sha256" },
+        "maxSourceReuse": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "requiresMeasuredTimeline": { "type": "boolean" }
+  },
+  "$defs": {
+    "pacingRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end", "min", "target", "max"],
+      "properties": {
+        "start": { "type": "number", "minimum": 0 },
+        "end": { "type": "number", "exclusiveMinimum": 0 },
+        "min": { "type": "number", "exclusiveMinimum": 0 },
+        "target": { "type": "number", "exclusiveMinimum": 0 },
+        "max": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    }
+  }
+}

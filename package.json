@@ -9,6 +9,7 @@
     "setup:windows": "powershell -ExecutionPolicy Bypass -File scripts/setup-hermes-studio.ps1",
     "shortcut:create": "powershell -ExecutionPolicy Bypass -File scripts/create-desktop-shortcut.ps1",
     "check:clone-ready": "node scripts/check-clone-ready.mjs",
+    "check:video-profiles": "node scripts/check-video-profile-contract.mjs",
     "check:desktop-progress": "node scripts/check-desktop-progress-feedback.mjs && node scripts/check-flow-create-keyboard-fallback.mjs",
     "check:packaged-render-runner": "node scripts/check-packaged-render-runner.mjs && node scripts/check-packaged-render-import-graph.mjs && node scripts/check-packaged-auth-account-switching.mjs",
     "check:visual-storytelling": "node scripts/check-visual-storytelling-prompts.mjs && node scripts/check-stickmanplus-history-preset.mjs && node scripts/check-stickmanplus-longform-history.mjs && node scripts/check-local-first-no-llm-lane.mjs",
